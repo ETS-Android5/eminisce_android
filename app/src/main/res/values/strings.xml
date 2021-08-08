@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Library</string>
+    <string name="eminisce_text">Eminisce</string>
+    <string name="welcome_text">Welcome to SIM Library !</string>
+    <string name="message_text">Please place your finger on the scanner</string>
+    <string name="temp_button">Temp Button</string>
+    <string name="textview_text">abc</string>
+    <string name="barcode_text">Enter Barcode</string>
+    <string name="book_view" />
+    <string name="user_view">abc</string>
+    <string name="books_borrowed">Books Borrowed</string>
+    <string name="end_button">End Session</string>
+    <string name="login_view">Logged in as:</string>
+    <string name="barcode_Info" />
+    <string name="login_view2">Logged in as:</string>
+    <string name="username_view">abc</string>
+    <string name="add_button">Add</string>
+    <string name="bookview" />
+    <string name="enter_barcode">Enter Barcode</string>
+    <string name="confirm_button">CONFIRM</string>
+    <string name="title_name">Eminisce</string>
+    <string name="title_name2">Eminisce</string>
+    <string name="error_view" />
+    <string name="scanButton">Scan</string>
+</resources>

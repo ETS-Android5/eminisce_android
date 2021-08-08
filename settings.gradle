@@ -1,0 +1,2 @@
+rootProject.name = "Eminisce Library App"
+include ':app'
