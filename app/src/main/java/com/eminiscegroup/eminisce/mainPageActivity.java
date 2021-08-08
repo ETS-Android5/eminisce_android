@@ -26,7 +26,7 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class mainPageActivity extends AppCompatActivity {
 
-    public static final String book_info = "com.example.library.info";
+    public static final String book_info = "com.eminiscegroup.eminisce.info";
     public int userID = 3;
     public String postBarcode = "";
     Button scanButton;

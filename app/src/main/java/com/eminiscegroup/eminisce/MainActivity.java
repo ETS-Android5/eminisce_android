@@ -3,35 +3,49 @@ package com.eminiscegroup.eminisce;
 import com.eminiscegroup.eminisce.caching.SaveBioData;
 import com.eminiscegroup.eminisce.server.JsonBioApi;
 import com.eminiscegroup.eminisce.server.LibraryUserBioResponse;
-import com.eminiscegroup.eminisce.R;
 
 import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
+import androidx.exifinterface.media.ExifInterface;
+import androidx.lifecycle.LifecycleOwner;
 
+import android.Manifest;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Base64;
 import android.util.Log;
+import android.util.Size;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.zkteco.android.biometric.core.device.ParameterHelper;
 import com.zkteco.android.biometric.core.device.TransportType;
 import com.zkteco.android.biometric.core.utils.LogHelper;
@@ -42,17 +56,23 @@ import com.zkteco.android.biometric.module.fingerprintreader.FingprintFactory;
 import com.zkteco.android.biometric.module.fingerprintreader.ZKFingerService;
 import com.zkteco.android.biometric.module.fingerprintreader.exception.FingerprintException;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 
+import kotlin.Pair;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -91,6 +111,29 @@ public class MainActivity extends AppCompatActivity {
     private static final int CHOOSE_FILE_REQUESTCODE = 8777;
     private static final int ACTIVITY_CHOOSE_FILE = 100;
 
+    private final int REQUEST_CAMERA_PERMISSION = 101;
+    private final int REQUEST_DIRECTORY_ACCESS  = 102;
+    private boolean isSerializedDataStored = false;
+
+    // Serialized data will be stored ( in app's private storage ) with this filename.
+    private final String SERIALIZED_DATA_FILENAME = "image_data";
+
+    // Shared Pref key to check if the data was stored.
+    private final String SHARED_PREF_IS_DATA_STORED_KEY = "is_data_stored";
+
+    public static TextView logTextView;
+
+    public static void setMessage(String message)
+    {
+        logTextView.setText(message);
+    }
+
+    private PreviewView previewView;
+    private FrameAnalyser frameAnalyser;
+    private FaceNetModel model;
+    private FileReader fileReader;
+    private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
+    private SharedPreferences sharedPreferences;
 
     private BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
         @Override
@@ -116,32 +159,167 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags( WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN );
         setContentView(R.layout.activity_main);
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        // Implementation of CameraX preview
 
+        previewView = findViewById( R.id.preview_view );
+        logTextView = findViewById( R.id.log_textview );
+        logTextView.setMovementMethod(new ScrollingMovementMethod());
+        // Necessary to keep the Overlay above the PreviewView so that the boxes are visible.
+        BoundingBoxOverlay boundingBoxOverlay = (BoundingBoxOverlay) findViewById( R.id.bbox_overlay );
+        boundingBoxOverlay.setWillNotDraw( false );
+        boundingBoxOverlay.setZOrderOnTop( true );
 
-        Methods = retrofit.create(Methods.class);
-        //Intent intent = getIntent();
-        dataTextView = (TextView)findViewById(R.id.dataTextView);
-        fingerprintImage = (ImageView)findViewById(R.id.fingerprintImage);
-        fingerprintImage2 = (ImageView)findViewById(R.id.fingerprintImage2);
-
-        //Initiate Device
+        //Initiate Fingerprint Scanner Device
         InitDevice();
         //Start fingerprintSensor
         startFingerprintSensor();
 
-        btn = (Button)findViewById(R.id.galleryBtn);
+        frameAnalyser = new FrameAnalyser( this , boundingBoxOverlay);
+        model = new FaceNetModel( this );
+        fileReader = new FileReader( this );
+
+
+        // We'll only require the CAMERA permission from the user.
+        // For scoped storage, particularly for accessing documents, we won't require WRITE_EXTERNAL_STORAGE or
+        // READ_EXTERNAL_STORAGE permissions. See https://developer.android.com/training/data-storage
+        if ( ActivityCompat.checkSelfPermission( this , Manifest.permission.CAMERA ) != PackageManager.PERMISSION_GRANTED ) {
+            ActivityCompat.requestPermissions( this , new String[]{ Manifest.permission.CAMERA, } , REQUEST_CAMERA_PERMISSION );
+        }
+        else {
+            startCameraPreview();
+        }
+
+        startLoadImages();
+
+        btn = (Button)findViewById(R.id.debug_button);
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startDownloadBioData();
+                //startDownloadBioData();
             }
         });
+    }
+
+    private void startLoadImages()
+    {
+        sharedPreferences = getSharedPreferences( getString( R.string.app_name ) , Context.MODE_PRIVATE );
+        isSerializedDataStored = sharedPreferences.getBoolean( SHARED_PREF_IS_DATA_STORED_KEY , false );
+        if ( !isSerializedDataStored ) {
+            Logger.Companion.log( "No serialized data was found. Downloading from database.");
+            startDownloadBioData();
+        }
+        else {
+            AlertDialog.Builder alertDialog = new AlertDialog.Builder( this );
+            alertDialog.setTitle( "Serialized Data")
+                    .setMessage( "Existing image data was found on this device. Would you like to load it?" )
+                    .setCancelable( false )
+                    .setNegativeButton( "LOAD", (dialog, which) ->
+                    {
+                        try {
+                            dialog.dismiss();
+                            frameAnalyser.setFaceList(loadSerializedImageData());
+                            Logger.Companion.log("Serialized data loaded.");
+                        }
+                        catch(Exception e)
+                        {
+                            e.printStackTrace();
+                        }
+                    })
+                    .setPositiveButton( "REDOWNLOAD FROM DATABASE", (dialog, which) ->
+                    {
+                        dialog.dismiss();
+                        startDownloadBioData();
+                    }).create();
+            alertDialog.show();
+        }
+    }
+
+    private Bitmap getFixedBitmap( Uri imageFileUri ) {
+        Bitmap imageBitmap = BitmapUtils.Companion.getBitmapFromUri( getContentResolver() , imageFileUri );
+        ExifInterface exifInterface = null;
+        try {
+            exifInterface = new ExifInterface(getContentResolver().openInputStream( imageFileUri ));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        switch(exifInterface.getAttributeInt( ExifInterface.TAG_ORIENTATION ,
+                ExifInterface.ORIENTATION_UNDEFINED ))
+        {
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                imageBitmap = BitmapUtils.Companion.rotateBitmap(imageBitmap, 180.0F);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                imageBitmap = BitmapUtils.Companion.rotateBitmap(imageBitmap, 90.0F);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                imageBitmap = BitmapUtils.Companion.rotateBitmap(imageBitmap, 270.0F);
+                break;
+        }
+        return imageBitmap;
+    }
+
+    private final FileReader.ProcessCallback fileReaderCallback = new FileReader.ProcessCallback() {
+        public void onProcessCompleted( ArrayList<kotlin.Pair<String, float[]>> data, int numImagesWithNoFaces) {
+            frameAnalyser.setFaceList(data);
+            try {
+                saveSerializedImageData(data);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Logger.Companion.log("Images parsed. Found " + numImagesWithNoFaces + " images with no faces.");
+        }
+    };
+
+    private void saveSerializedImageData( ArrayList<kotlin.Pair<String, float[]>> data ) throws IOException {
+        File serializedDataFile = new File( getFilesDir() , SERIALIZED_DATA_FILENAME );
+        ObjectOutputStream ostream = new ObjectOutputStream((OutputStream)(new FileOutputStream(serializedDataFile)));
+        ostream.writeObject(data);
+        ostream.flush();
+        ostream.close();
+        sharedPreferences.edit().putBoolean( SHARED_PREF_IS_DATA_STORED_KEY , true ).apply();
+    }
+
+    private ArrayList<kotlin.Pair<String, float[]>> loadSerializedImageData() throws IOException, ClassNotFoundException {
+        File serializedDataFile = new File( getFilesDir() , SERIALIZED_DATA_FILENAME );
+        ObjectInputStream objectInputStream = new ObjectInputStream((InputStream)(new FileInputStream(serializedDataFile)));
+        ArrayList<kotlin.Pair<String,float[]>> data = (ArrayList<kotlin.Pair<String, float[]>>) objectInputStream.readObject();
+        objectInputStream.close();
+        return data;
+    }
+
+    // Attach the camera stream to the PreviewView.
+    private void startCameraPreview() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                bindPreview(cameraProvider);
+            } catch (ExecutionException | InterruptedException e) {
+                // No errors need to be handled for this Future.
+                // This should never be reached.
+            }
+        }, ContextCompat.getMainExecutor(this));
+        Log.d("CAMERA", "1");
+
+    }
+
+    private void bindPreview(ProcessCameraProvider cameraProvider) {
+        Preview preview = new Preview.Builder().build();
+        CameraSelector cameraSelector = new CameraSelector.Builder()
+                .requireLensFacing( CameraSelector.LENS_FACING_FRONT )
+                .build();
+        preview.setSurfaceProvider( previewView.getSurfaceProvider() );
+        ImageAnalysis imageFrameAnalysis = new ImageAnalysis.Builder()
+                .setTargetResolution(new Size( 480, 640 ) )
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+        imageFrameAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), frameAnalyser );
+        cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview , imageFrameAnalysis);
+        Log.d("CAMERA", "2");
     }
 
     private void startDownloadBioData()
@@ -153,6 +331,8 @@ public class MainActivity extends AppCompatActivity {
         JsonBioApi service = retrofit.create(JsonBioApi.class);
         Call<List<LibraryUserBioResponse>> call = service.getBios();
 
+        Log.d("DB", "Downloading biometric data from database...");
+
         call.enqueue(new Callback<List<LibraryUserBioResponse>>() {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
@@ -162,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
                     List<LibraryUserBioResponse> bios = (List<LibraryUserBioResponse>) response.body();
                     SaveBioData save_bio_data = new SaveBioData(MainActivity.this, bios);
                     save_bio_data.Save();
-                    loadFPData();
+                    loadBio();
                 }
                 else{
                     Log.e("DB", response.errorBody().toString());
@@ -170,17 +350,55 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onFailure(Call<List<LibraryUserBioResponse>> call, Throwable t) {
+                Log.e("DB", "OnFailure called");
+                t.printStackTrace();
             }
         });
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void loadFPData()
+    private void loadBio()
     {
+        Logger.Companion.log("Reading downloaded biometric data to prepare authentication...");
         try {
-            File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
-            Log.d("LOAD FP", "Does FP folder exist: " + dir.exists());
+            // A bit of duplicated code here but I don't want to mix face images and fingerprint templates together
+            // Better to keep them separated
+            File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FACES");
+            Log.d("LOAD FACE IMAGES", "Does BIO_FACES folder exist: " + dir.exists());
+            ArrayList<kotlin.Pair<String,Bitmap>> images = new ArrayList<kotlin.Pair<String,Bitmap>>();
             DocumentFile tree = DocumentFile.fromFile(dir);
+            if (tree.listFiles().length > 0) {
+                for (DocumentFile df : tree.listFiles()) {
+                    if (df.isDirectory()) {
+                        String name = df.getName();
+                        for (DocumentFile face : df.listFiles()) {
+                            try {
+                                images.add(new kotlin.Pair(name, getFixedBitmap(face.getUri())));
+                            }
+                            catch(Exception e)
+                            {
+                                Logger.Companion.log("Could not parse an image in " + name + " directory.");
+                                break;
+                            }
+                        }
+                        Logger.Companion.log("Found " + df.listFiles().length + " images in " + name + " directory");
+                    }
+                    else
+                    {
+                        Logger.Companion.log("Invalid BIO_FACES folder structure.");
+                    }
+                }
+            }
+            else {
+                Logger.Companion.log( "Empty biometric data folder!" );
+            }
+            fileReader.run( images , fileReaderCallback );
+            Logger.Companion.log( "Detecting faces in " + images.size() + " images ..." );
+
+            Logger.Companion.log( "Loading fingerprints ..." );
+            dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
+            Log.d("LOAD FP", "Does BIO_FINGERPRINTS folder exist: " + dir.exists());
+            tree = DocumentFile.fromFile(dir);
             if (tree.listFiles().length > 0) {
                 for (DocumentFile df : tree.listFiles()) {
                     if (df.isDirectory()) {
@@ -220,6 +438,16 @@ public class MainActivity extends AppCompatActivity {
         return ((path == null || path.isEmpty()) ? (uri.getPath()) : path);
     }
 
+
+
+    /** Called when the user taps the button */
+    public void tempButton(View view) {
+        Intent intent = new Intent(this, mainPageActivity.class);
+        startActivity(intent);
+    }
+
+    //region FINGERPRINT FUNCTIONS
+
     private void startFingerprintSensor() {
         // Define output log level
         LogHelper.setLevel(Log.VERBOSE);
@@ -230,17 +458,6 @@ public class MainActivity extends AppCompatActivity {
         //set pid
         fingerprintParams.put(ParameterHelper.PARAM_KEY_PID, PID);
         fingerprintSensor = FingprintFactory.createFingerprintSensor(this, TransportType.USB, fingerprintParams);
-    }
-
-    public void convertToByte(Bitmap bmp){
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        bmp.compress(Bitmap.CompressFormat.PNG, 100, baos);
-        verifyBuffer = baos.toByteArray();
-        int len = verifyBuffer.length;
-        String strBase2 = Base64.encodeToString(verifyBuffer, 0, len, Base64.NO_WRAP);
-        dataTextView.setText(verifyBuffer.toString());
-        //String encodedImage = android.util.Base64.encodeToString(imageBytes, Base64.DEFAULT);
-        //return encodedImage;
     }
 
     private void InitDevice()
@@ -266,63 +483,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
-
-    public void saveBitmap(Bitmap bm) {
-        String fullPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Internal storage";
-        File f = new File(fullPath, "fingerprint2.bmp");
-        //f.mkdirs();
-
-        if (f.exists()) {
-            f.delete();
-        }
-        FileOutputStream out = null;
-        try {
-            out = new FileOutputStream(f);
-            bm.compress(Bitmap.CompressFormat.PNG, 90, out);
-            out.flush();
-            out.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-
-    /*
-    public byte[] convertImageToByte(Uri uri){
-        byte[] data = null;
-        try {
-            ContentResolver cr = getBaseContext().getContentResolver();
-            InputStream inputStream = cr.openInputStream(uri);
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
-            data = baos.toByteArray();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-        return data;
-    }
-    */
-
-    public Bitmap getBitmapFromUri(Uri uri) throws IOException {
-        ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
-        FileDescriptor fileDescriptor = parcelFileDescriptor.getFileDescriptor();
-        Bitmap image = BitmapFactory.decodeFileDescriptor(fileDescriptor);
-        parcelFileDescriptor.close();
-        return image;
-    }
-
-
-    /** Called when the user taps the button */
-    public void tempButton(View view) {
-        Intent intent = new Intent(this, mainPageActivity.class);
-        startActivity(intent);
-    }
-
     //Pressed if user wants to log in using fingerprint authentication
     public void fingerprintBtn (View view) throws FingerprintException
     {
@@ -343,7 +503,6 @@ public class MainActivity extends AppCompatActivity {
                                 ToolUtils.outputHexString(fpImage);
                                 LogHelper.i("width=" + width + "\nHeight=" + height);
                                 Bitmap bitmapFp = ToolUtils.renderCroppedGreyScaleBitmap(fpImage, width, height);
-                                saveBitmap(bitmapFp);
                                 fingerprintImage.setImageBitmap(bitmapFp);
                             }
                             //textView.setText("FakeStatus:" + fingerprintSensor.getFakeStatus());
@@ -511,5 +670,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //endregion
 
 }
