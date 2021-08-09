@@ -11,6 +11,8 @@ import com.eminiscegroup.eminisce.R;
 
 public class checkoutPageActivity extends AppCompatActivity {
 
+    private String userID;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -23,6 +25,9 @@ public class checkoutPageActivity extends AppCompatActivity {
         // Capture the layout's TextView and set the string as its text
         TextView textView = findViewById(R.id.book_view);
         textView.setText(message);
+
+        userID = getIntent().getStringExtra("userid");
+        ((TextView)findViewById(R.id.userID2)).setText(userID);
     }
 
     public void endButton(View view) {

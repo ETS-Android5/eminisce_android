@@ -7,6 +7,45 @@
     android:background="@drawable/wavy"
     tools:context="com.eminiscegroup.eminisce.checkoutPageActivity">
 
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="100dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/sim_removebg_preview" />
+
+    <TextView
+        android:id="@+id/book_view"
+        android:layout_width="280dp"
+        android:layout_height="443dp"
+        android:background="@drawable/layout_border"
+        android:textSize="20sp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.6" />
+
+    <TextView
+        android:id="@+id/userID2"
+        android:layout_width="109dp"
+        android:layout_height="34dp"
+        android:text="(USER ID)"
+        android:textAlignment="textEnd"
+        android:textColor="@color/black"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.973"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.037" />
+
     <Button
         android:id="@+id/confirmButton"
         android:layout_width="308dp"
@@ -27,93 +66,33 @@
         app:layout_constraintVertical_bias="0.986" />
 
     <TextView
-        android:id="@+id/book_view"
-        android:layout_width="286dp"
-        android:layout_height="471dp"
-        android:layout_marginStart="83dp"
-        android:layout_marginLeft="83dp"
-        android:layout_marginEnd="83dp"
-        android:layout_marginRight="83dp"
-        android:layout_marginBottom="32dp"
-        android:background="@drawable/layout_border"
-        android:textSize="24sp"
-        app:layout_constraintBottom_toTopOf="@+id/confirmButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="1.0" />
-
-    <TextView
         android:id="@+id/borrowedBooksTitle"
         android:layout_width="239dp"
         android:layout_height="46dp"
         android:text="@string/books_borrowed"
+        android:textAlignment="center"
         android:textColor="@color/black"
         android:textSize="24sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.093"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.257" />
-
-    <TextView
-        android:id="@+id/textView4"
-        android:layout_width="141dp"
-        android:layout_height="33dp"
-        android:text="@string/login_view"
-        android:textColor="@color/black"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.143" />
-
-    <TextView
-        android:id="@+id/loggedInID"
-        android:layout_width="137dp"
-        android:layout_height="36dp"
-        android:text="@string/user_view"
-        android:textSize="20sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.985"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.182" />
+        app:layout_constraintBottom_toTopOf="@+id/book_view"
+        app:layout_constraintEnd_toEndOf="@+id/book_view"
+        app:layout_constraintStart_toStartOf="@+id/book_view"
+        app:layout_constraintTop_toBottomOf="@+id/textView6" />
 
     <TextView
         android:id="@+id/textView6"
-        android:layout_width="147dp"
-        android:layout_height="37dp"
-        android:text="@string/title_name2"
+        android:layout_width="167dp"
+        android:layout_height="57dp"
+        android:text="@string/title_name"
+        android:textAlignment="center"
         android:textColor="@color/black"
         android:textSize="34sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.497"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.07" />
+        app:layout_constraintVertical_bias="0.039" />
 
-    <ImageView
-        android:id="@+id/imageView2"
-        android:layout_width="122dp"
-        android:layout_height="73dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginLeft="16dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="25dp"
-        android:layout_marginRight="25dp"
-        app:layout_constraintEnd_toStartOf="@+id/textView6"
-        app:layout_constraintHorizontal_bias="0.428"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/sim_removebg_preview" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

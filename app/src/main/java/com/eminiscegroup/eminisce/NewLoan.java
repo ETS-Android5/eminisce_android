@@ -7,7 +7,7 @@ public class NewLoan {
 
     @SerializedName("borrower")
     @Expose
-    private int borrower;
+    private String borrower;
 
     @SerializedName("book")
     @Expose
@@ -17,12 +17,12 @@ public class NewLoan {
     @Expose
     private String duedate;
 
-    public NewLoan(int borrower, String book) {
+    public NewLoan(String borrower, String book) {
         this.borrower = borrower;
         this.book = book;
     }
 
-    public int getBorrower() {
+    public String getBorrower() {
         return borrower;
     }
 

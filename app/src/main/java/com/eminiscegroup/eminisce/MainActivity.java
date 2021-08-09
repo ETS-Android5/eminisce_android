@@ -100,7 +100,8 @@ public class MainActivity extends AppCompatActivity {
 
     private final String ACTION_USB_PERMISSION = "com.zkteco.silkiddemo.USB_PERMISSION";
 
-    private static String BASE_URL = "https://eminisce.herokuapp.com/";
+    public static String BASE_URL = "https://eminisce.herokuapp.com/";
+
     private Methods Methods;
     private boolean verified = false;
     public static final int PICK_IMAGE = 100;
@@ -163,10 +164,12 @@ public class MainActivity extends AppCompatActivity {
     private String face_identifiedID = null;
     private String fp_identifiedID = null;
     private long faceRecognizedTime = 0; // How long a single face has been recognized (in ms)
-    private final long faceRecognizedTimeThreshold = 3000; // How long a single face should have been recognized for before being accepted (in ms)
+    private final long faceRecognizedTimeThreshold = 2000; // How long a single face should have been recognized for before being accepted (in ms)
     private final long maxFaceThresholdFailTime = 1000; // How long before resetting timer if face recognition fails due to threshold (in ms)
     private Instant lastFaceRecognizedInstant = null;
     private Instant lastFPRecognizedInstant = null;
+
+    public static String userID;
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
@@ -381,7 +384,7 @@ public class MainActivity extends AppCompatActivity {
     private void startDownloadBioData()
     {
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://eminisce.herokuapp.com/")
+                .baseUrl(BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         JsonBioApi service = retrofit.create(JsonBioApi.class);
@@ -599,6 +602,7 @@ public class MainActivity extends AppCompatActivity {
     /** Called when the user taps the button */
     public void goToMain() {
         Intent intent = new Intent(this, mainPageActivity.class);
+        intent.putExtra("userid", face_identifiedID);
         startActivity(intent);
     }
 

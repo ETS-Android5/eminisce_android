@@ -1,18 +1,24 @@
 package com.eminiscegroup.eminisce;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.eminiscegroup.eminisce.R;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 
@@ -27,22 +33,28 @@ import retrofit2.converter.gson.GsonConverterFactory;
 public class mainPageActivity extends AppCompatActivity {
 
     public static final String book_info = "com.eminiscegroup.eminisce.info";
-    public int userID = 3;
     public String postBarcode = "";
     Button scanButton;
     TextView errorView;
     EditText barcode;
     private Methods Methods;
-    private static String BASE_URL = "https://eminisce.herokuapp.com/";
     String duedate = "";
     ArrayList<String> barcodes = new ArrayList<String>();
+
+    private String userID;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags( WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN );
+
         setContentView(R.layout.activity_main2);
+        userID = getIntent().getStringExtra("userid");
+        ((TextView)findViewById(R.id.userID)).setText(userID);
 
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
+                .baseUrl(MainActivity.BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
@@ -50,20 +62,11 @@ public class mainPageActivity extends AppCompatActivity {
         //Intent intent = getIntent();
     }
     public void scanButton(View view) {
-        scanButton = findViewById(R.id.scanButton);
-
-        scanButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                IntentIntegrator intentIntegrator = new IntentIntegrator(
-                        mainPageActivity.this);
-                intentIntegrator.setOrientationLocked(true);
-                intentIntegrator.setCaptureActivity(Capture.class);
-                intentIntegrator.initiateScan();
-            }
-        });
-
-
+        IntentIntegrator intentIntegrator = new IntentIntegrator(
+                mainPageActivity.this);
+        intentIntegrator.setOrientationLocked(true);
+        intentIntegrator.setCaptureActivity(Capture.class);
+        intentIntegrator.initiateScan();
     }
 
     @Override
@@ -76,37 +79,54 @@ public class mainPageActivity extends AppCompatActivity {
         if(intentResult.getContents() != null)
         {
             barcode.setText(intentResult.getContents());
+            addButton(null);
+            barcode.setText("");
         }
         else
         {
-            errorView.setText("Error");
+            Toast toast = Toast.makeText(mainPageActivity.this, "Canceled scan.", Toast.LENGTH_SHORT);
+            toast.show();
         }
     }
+    private int booksProcessed = 0;
     /** Called when the user taps the button */
     public void confirmButton(View view) throws InterruptedException {
+        if(barcodes.size() == 0)
+        {
+            Toast toast = Toast.makeText(mainPageActivity.this, "Please add some books!", Toast.LENGTH_SHORT);
+            toast.show();
+            return;
+        }
         TextView textView = findViewById(R.id.book_view);
 
-        textView.setText("");
+        booksProcessed = 0;
         for(int i = 0; i < barcodes.size(); i++)
         {
             postBarcode = barcodes.get(i);
             loanBook();
-            getBookData();
+            //getBookData(); This just creates race condition...
         }
+        //goToCheckoutPage();
 
     }
 
     public void nextButton(View view)
     {
+        goToCheckoutPage();
+    }
+    //String allMessage = "";
+
+    private void goToCheckoutPage()
+    {
         Intent intent = new Intent(this, checkoutPageActivity.class);
         TextView textView = findViewById(R.id.book_view);
         String bookInfo = textView.getText().toString();
         intent.putExtra(book_info, bookInfo);
+        intent.putExtra("userid", userID);
 
         //loanBook();
         startActivity(intent);
     }
-    //String allMessage = "";
 
     public void cancelButton(View view)
     {
@@ -118,9 +138,17 @@ public class mainPageActivity extends AppCompatActivity {
         //Intent intent = new Intent(this, checkoutPageActivity.class);
         EditText editText = (EditText) findViewById(R.id.barcode_info);
         String tempBarcode = editText.getText().toString();
+        if(tempBarcode.isEmpty()) {
+            Toast toast = Toast.makeText(mainPageActivity.this, "Please type in a barcode!", Toast.LENGTH_SHORT);
+            toast.show();
+            return;
+        }
+        if(barcodes.contains(tempBarcode)) {
+            Toast toast = Toast.makeText(mainPageActivity.this, "You already added this book!", Toast.LENGTH_SHORT);
+            toast.show();
+            return;
+        }
         postBarcode = tempBarcode;
-        barcodes.add(tempBarcode);
-
         getBookData();
 
     }
@@ -133,9 +161,30 @@ public class mainPageActivity extends AppCompatActivity {
         call.enqueue(new Callback<Retrieve>() {
             @Override
             public void onResponse(Call<Retrieve> call, Response<Retrieve> response) {
-                if(!response.isSuccessful())
+                if(response.code() != 200)
                 {
-                    errorView.setText("Code: " + response.code());
+                    String errorMsg;
+                    if(response.code() == 404)
+                    {
+                        errorMsg = "Cannot find this book's information. Please check the barcode and try again!";
+                    }
+                    else {
+                        try {
+                            JSONObject errorJson = new JSONObject(response.errorBody().string());
+                            errorMsg = errorJson.getString("error");
+                        } catch (Exception e) {
+                            errorMsg = e.getMessage();
+                        }
+                    }
+                    AlertDialog.Builder alertDialog = new AlertDialog.Builder( mainPageActivity.this );
+                    alertDialog.setTitle( "Error")
+                            .setMessage( "Cannot retrieve book information from database.\nError code: " + response.code() + ".\nMessage: " + errorMsg)
+                            .setCancelable( false )
+                            .setNegativeButton( "CLOSE", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                            }).create();
+                    alertDialog.show();
                     return;
                 }
                 else {
@@ -147,16 +196,22 @@ public class mainPageActivity extends AppCompatActivity {
                     
                     content += "Title: " + ids.getTitle() + "      " + "\n";
                     content += "Authors: " + ids.getAuthors() + "\n";
+                    //FIND A WAY TO PUT THE COVER HERE!!!
 
                     textView.append(content);
                     textView.append(duedate);
+                    // OK I see your clever trick here, you run getBookData() again to put the duedate in?
+                    // It would be great if you just put every fcking thing in the "next" page instead
+                    barcodes.add(postBarcode);
                     //}
                 }
             }
 
             @Override
             public void onFailure(Call<Retrieve> call, Throwable t) {
-                errorView.setText(t.getMessage());
+                Toast toast = Toast.makeText(mainPageActivity.this, "Please check Internet connection! " /* + t.getMessage() */, Toast.LENGTH_LONG);
+                toast.show();
+                t.printStackTrace();
             }
         });
     }
@@ -171,15 +226,27 @@ public class mainPageActivity extends AppCompatActivity {
         call.enqueue(new Callback<NewLoan>() {
             @Override
             public void onResponse(Call<NewLoan> call, Response<NewLoan> response) {
-
-
-                if(!response.isSuccessful())
+                if(response.code() != 201)
                 {
-                    String message = "";
-                    message += "Code: " + response.code() + "\n";
-                    message += "Book is currently unavailable" + "\n";
-                    //message += "Error: " + borrowResponse.getError();
-                    errorView.setText(message);
+                    String errorMsg;
+                    try {
+                        JSONObject errorJson = new JSONObject(response.errorBody().string());
+                        errorMsg = errorJson.getString("error");
+                        //errorMsg = errorJson.toString();
+                    }
+                    catch(Exception e)
+                    {
+                        errorMsg = e.getMessage();
+                    }
+                    AlertDialog.Builder alertDialog = new AlertDialog.Builder( mainPageActivity.this );
+                    alertDialog.setTitle( "Error")
+                            .setMessage( "Cannot process loan request.\nError code: " + response.code() + ".\nMessage: " + errorMsg)
+                            .setCancelable( false )
+                            .setNegativeButton( "CLOSE", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                            }).create();
+                    alertDialog.show();
                     return;
                 }
                 else {
@@ -190,12 +257,20 @@ public class mainPageActivity extends AppCompatActivity {
                     duedate = "DueDate: " + borrowResponse.getDuedate() + "\n\n";
                     //getBookData();
                     //textView.setText(content);
+
+                    booksProcessed ++;
+                    if(booksProcessed == barcodes.size())
+                    {
+                        goToCheckoutPage();
+                    }
                 }
             }
 
             @Override
             public void onFailure(Call<NewLoan> call, Throwable t) {
-                errorView.setText(t.getMessage());
+                Toast toast = Toast.makeText(mainPageActivity.this, "Please check Internet connection! " /* + t.getMessage() */, Toast.LENGTH_LONG);
+                toast.show();
+                t.printStackTrace();
             }
         });
     }
