@@ -97,15 +97,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static String BASE_URL = "https://eminisce.herokuapp.com/";
     private Methods Methods;
-    private TextView dataTextView = null;
-    private ImageView fingerprintImage = null;
-    private ImageView fingerprintImage2 = null;
     private boolean verified = false;
     public static final int PICK_IMAGE = 100;
     private Button btn;
-    private Uri selectedImageUri = null;
-    private byte[] verifyBuffer;
-    private String filePath = null;
     private String strBase64;
 
     private static final int CHOOSE_FILE_REQUESTCODE = 8777;
@@ -526,7 +520,7 @@ public class MainActivity extends AppCompatActivity {
                                 ToolUtils.outputHexString(fpImage);
                                 LogHelper.i("width=" + width + "\nHeight=" + height);
                                 Bitmap bitmapFp = ToolUtils.renderCroppedGreyScaleBitmap(fpImage, width, height);
-                                fingerprintImage.setImageBitmap(bitmapFp);
+                                //fingerprintImage.setImageBitmap(bitmapFp);
                             }
                             //textView.setText("FakeStatus:" + fingerprintSensor.getFakeStatus());
                         }
