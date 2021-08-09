@@ -571,9 +571,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         // Face and fingerprint recognize different people, reject
-        if(face_identifiedID != fp_identifiedID)
+        if(!face_identifiedID.equals(fp_identifiedID))
         {
-            Logger.Companion.log("Discrepancy between face and fingerprint, rejected");
+            Logger.Companion.log("Discrepancy between face and fingerprint, rejected\n" +
+                    "face_identifiedID is '" + face_identifiedID + "' fp_identifiedID is '" + fp_identifiedID + ";");
             return;
         }
         // In case the fingerprint was scanned first but the face took longer than 4 seconds since the fingerprint was scanned, reject
