@@ -156,6 +156,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -195,6 +196,12 @@ public class MainActivity extends AppCompatActivity {
 
         startLoadImages();
 
+        try {
+            startFingerprintScan();
+        } catch (FingerprintException e) {
+            e.printStackTrace();
+        }
+
         btn = (Button)findViewById(R.id.debug_button);
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -204,6 +211,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     private void startLoadImages()
     {
         sharedPreferences = getSharedPreferences( getString( R.string.app_name ) , Context.MODE_PRIVATE );
@@ -215,13 +223,14 @@ public class MainActivity extends AppCompatActivity {
         else {
             AlertDialog.Builder alertDialog = new AlertDialog.Builder( this );
             alertDialog.setTitle( "Serialized Data")
-                    .setMessage( "Existing image data was found on this device. Would you like to load it?" )
+                    .setMessage( "Existing bio data was found on this device. Would you like to load it?" )
                     .setCancelable( false )
                     .setNegativeButton( "LOAD", (dialog, which) ->
                     {
                         try {
                             dialog.dismiss();
                             frameAnalyser.setFaceList(loadSerializedImageData());
+                            loadFPBio();
                             Logger.Companion.log("Serialized data loaded.");
                         }
                         catch(Exception e)
@@ -342,7 +351,8 @@ public class MainActivity extends AppCompatActivity {
                     List<LibraryUserBioResponse> bios = (List<LibraryUserBioResponse>) response.body();
                     SaveBioData save_bio_data = new SaveBioData(MainActivity.this, bios);
                     save_bio_data.Save();
-                    loadBio();
+                    loadFacesBio();
+                    loadFPBio();
                 }
                 else{
                     Log.e("DB", response.errorBody().toString());
@@ -357,12 +367,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void loadBio()
+    private void loadFacesBio()
     {
-        Logger.Companion.log("Reading downloaded biometric data to prepare authentication...");
+        Logger.Companion.log("Reading downloaded facial biometric data to prepare authentication...");
         try {
-            // A bit of duplicated code here but I don't want to mix face images and fingerprint templates together
-            // Better to keep them separated
             File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FACES");
             Log.d("LOAD FACE IMAGES", "Does BIO_FACES folder exist: " + dir.exists());
             ArrayList<kotlin.Pair<String,Bitmap>> images = new ArrayList<kotlin.Pair<String,Bitmap>>();
@@ -395,10 +403,22 @@ public class MainActivity extends AppCompatActivity {
             fileReader.run( images , fileReaderCallback );
             Logger.Companion.log( "Detecting faces in " + images.size() + " images ..." );
 
-            Logger.Companion.log( "Loading fingerprints ..." );
-            dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
+
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void loadFPBio()
+    {
+        try {
+            Logger.Companion.log("Loading fingerprints ...");
+            File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
             Log.d("LOAD FP", "Does BIO_FINGERPRINTS folder exist: " + dir.exists());
-            tree = DocumentFile.fromFile(dir);
+            DocumentFile tree = DocumentFile.fromFile(dir);
             if (tree.listFiles().length > 0) {
                 for (DocumentFile df : tree.listFiles()) {
                     if (df.isDirectory()) {
@@ -407,11 +427,15 @@ public class MainActivity extends AppCompatActivity {
                             File file = new File(getPath(fp.getUri()));
                             byte[] bytes = Files.readAllBytes(file.toPath());
                             ZKFingerService.save(bytes, name);
-                            Log.d("Verify fp", "Verified");
+                            //Logger.Companion.log("Loaded fingerprint for " + name);
                         }
                     }
                 }
             }
+            else {
+                Logger.Companion.log( "Empty biometric data folder!" );
+            }
+            Logger.Companion.log("Successfully loaded fingerprint data");
         }
         catch(Exception e)
         {
@@ -483,8 +507,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //Pressed if user wants to log in using fingerprint authentication
-    public void fingerprintBtn (View view) throws FingerprintException
+    public void startFingerprintScan () throws FingerprintException
     {
         //Fingerprint Capture Listener
         try {
@@ -526,7 +549,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            dataTextView.setText("Extract fail, errorcode:" + err);
+                            Logger.Companion.log("Extract fail, errorcode:" + err);
                         }
                     });
                 }
@@ -545,7 +568,7 @@ public class MainActivity extends AppCompatActivity {
                                 if (ret > 0)
                                 {
                                     String strRes[] = new String(bufids).split("\t");
-                                    dataTextView.setText("This fingerprint has already been enrolled by " + strRes[0] + ", please cancel enrollment");
+                                    Logger.Companion.log("This fingerprint has already been enrolled by " + strRes[0] + ", please cancel enrollment");
                                     isRegister = false;
                                     enrollidx = 0;
                                     return;
@@ -553,7 +576,7 @@ public class MainActivity extends AppCompatActivity {
 
                                 if (enrollidx > 0 && ZKFingerService.verify(regtemparray[enrollidx-1], tmpBuffer) <= 0)
                                 {
-                                    dataTextView.setText("Please press the same finger 3 times on the sensor for enrollment");
+                                    Logger.Companion.log("Please press the same finger 3 times on the sensor for enrollment");
                                     return;
                                 }
                                 System.arraycopy(tmpBuffer, 0, regtemparray[enrollidx], 0, 2048);
@@ -569,14 +592,14 @@ public class MainActivity extends AppCompatActivity {
 
                                         //Convert byte array into bitmap
                                         //bitmap = BitmapFactory.decodeByteArray(regTemp , 0, regTemp.length);
-                                        dataTextView.setText("Enrollment success, userid:" + uid + "count:" + ZKFingerService.count());
+                                        Logger.Companion.log("Enrollment success, userid:" + uid + "count:" + ZKFingerService.count());
 
                                     } else {
-                                        dataTextView.setText("Enrollment failed");
+                                        Logger.Companion.log("Enrollment failed");
                                     }
                                     isRegister = false;
                                 } else {
-                                    dataTextView.setText("You need to press your finger onto the sensor " + (3 - enrollidx) + "times more");
+                                    Logger.Companion.log("You need to press your finger onto the sensor " + (3 - enrollidx) + "times more");
                                 }
                             } else {
                                 byte[] bufids = new byte[256];
@@ -584,12 +607,12 @@ public class MainActivity extends AppCompatActivity {
                                 int ret = ZKFingerService.identify(tmpBuffer, bufids, 55, 1);
                                 if (ret > 0) {
                                     String strRes[] = new String(bufids).split("\t");
-                                    //dataTextView.setText("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
-                                    dataTextView.setText("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
+                                    //Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
+                                    Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
                                 } else {
-                                    dataTextView.setText("Identify fail");
-                                    //dataTextView.setText(strBase64);
-                                    //dataTextView.setText(tmpBuffer.toString());
+                                    Logger.Companion.log("Identify fail");
+                                    //Logger.Companion.log(strBase64);
+                                    //Logger.Companion.log(tmpBuffer.toString());
                                 }
                                 //Base64 Template
                                 //String strBase64 = Base64.encodeToString(tmpBuffer, 0, fingerprintSensor.getLastTempLen(), Base64.NO_WRAP);
@@ -604,12 +627,12 @@ public class MainActivity extends AppCompatActivity {
             fingerprintSensor.startCapture(0);
             bstart = true;
 
-            dataTextView.setText("FIngerprint Sensor Started Successfully");
+            Logger.Companion.log("FIngerprint Sensor Started Successfully");
 
         }
         catch (FingerprintException e)
         {
-            dataTextView.setText("Fail to begin sensor.errorcode:"+ e.getErrorCode() + "err message:" + e.getMessage() + "inner code:" + e.getInternalErrorCode());
+            Logger.Companion.log("Fail to begin sensor.errorcode:"+ e.getErrorCode() + "err message:" + e.getMessage() + "inner code:" + e.getInternalErrorCode());
         }
 
         /*
@@ -625,11 +648,11 @@ public class MainActivity extends AppCompatActivity {
         if (bstart) {
             isRegister = true;
             enrollidx = 0;
-            dataTextView.setText("You need to scan your fingerprint 3 times");
+            Logger.Companion.log("You need to scan your fingerprint 3 times");
         }
         else
         {
-            dataTextView.setText("Please start your fingerprint sensor first");
+            Logger.Companion.log("Please start your fingerprint sensor first");
         }
     }
 
@@ -643,14 +666,14 @@ public class MainActivity extends AppCompatActivity {
                 fingerprintSensor.stopCapture(0);
                 bstart = false;
                 fingerprintSensor.close(0);
-                dataTextView.setText("Fingerprint Sensor Stopped Successfully");
+                Logger.Companion.log("Fingerprint Sensor Stopped Successfully");
             }
             else
             {
-                dataTextView.setText("Sensor has already stopped");
+                Logger.Companion.log("Sensor has already stopped");
             }
         } catch (FingerprintException e) {
-            dataTextView.setText("Failed to stop fingerprint sensor, errno=" + e.getErrorCode() + "\nmessage=" + e.getMessage());
+            Logger.Companion.log("Failed to stop fingerprint sensor, errno=" + e.getErrorCode() + "\nmessage=" + e.getMessage());
         }
     }
 

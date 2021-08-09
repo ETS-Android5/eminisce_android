@@ -35,16 +35,6 @@
         app:layout_constraintTop_toTopOf="@+id/textView"
         app:layout_constraintVertical_bias="0.115" />
 
-    <com.eminiscegroup.eminisce.BoundingBoxOverlay
-        android:id="@+id/bbox_overlay"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="@+id/log_textview"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <TextView
         android:id="@+id/textView2"
         android:layout_width="wrap_content"
@@ -67,7 +57,7 @@
         android:textColor="@color/black"
         android:textSize="20sp"
         android:textStyle="bold|italic"
-        app:layout_constraintBottom_toTopOf="@+id/cameraWrapper"
+        app:layout_constraintBottom_toTopOf="@+id/cameraFrame"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/textView2"
@@ -97,33 +87,51 @@
         app:layout_constraintTop_toTopOf="@+id/textView"
         app:layout_constraintVertical_bias="0.0" />
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cameraWrapper"
+    <!-- This is the added FrameLayout -->
+    <FrameLayout
+        android:id="@+id/cameraFrame"
         android:layout_width="263dp"
         android:layout_height="410dp"
+        app:cardCornerRadius="40dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.75"
-        app:cardCornerRadius="40dp">
+        app:layout_constraintVertical_bias="0.75">
 
-        <androidx.camera.view.PreviewView
-            android:id="@+id/preview_view"
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cameraWrapper"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="fitCenter">
+            app:cardCornerRadius="40dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.75">
 
-        </androidx.camera.view.PreviewView>
+            <androidx.camera.view.PreviewView
+                android:id="@+id/preview_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter">
 
-        <ImageView
-            android:id="@+id/imageView3"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone"
-            app:srcCompat="@drawable/barcode_target" />
+            </androidx.camera.view.PreviewView>
 
-    </androidx.cardview.widget.CardView>
+            <ImageView
+                android:id="@+id/imageView3"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"
+                app:srcCompat="@drawable/barcode_target" />
+
+            <com.eminiscegroup.eminisce.BoundingBoxOverlay
+                android:id="@+id/bbox_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
 
     <TextView
         android:id="@+id/log_textview"
