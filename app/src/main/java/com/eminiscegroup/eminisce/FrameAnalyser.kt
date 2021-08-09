@@ -54,7 +54,24 @@ class FrameAnalyser( private var context: Context , private var boundingBoxOverl
     // Use any one of the two metrics, "cosine" or "l2"
     private val metricToBeUsed = "l2"
 
-    private val minFaceWidth = 140
+    private val minFaceWidth = 150
+
+    private var log = true
+
+    interface FaceCallback {
+        fun onRecognizedFace(userid: String?, distance : Double)
+        fun onNoFace()
+    }
+    private lateinit var callback : FaceCallback
+    fun setCallback( callback : FaceCallback)
+    {
+        this.callback = callback
+    }
+
+    fun disableLogging()
+    {
+        log = false
+    }
 
     override fun analyze( image: ImageProxy) {
         // Rotated bitmap for the FaceNet model
@@ -93,6 +110,9 @@ class FrameAnalyser( private var context: Context , private var boundingBoxOverl
     private suspend fun runModel( faces : List<Face> , cameraFrameBitmap : Bitmap ){
         withContext( Dispatchers.Default ) {
             val predictions = ArrayList<Prediction>()
+            if (faces.isEmpty()) {
+                callback.onNoFace()
+            }
             for (face in faces) {
                 try {
                     // Log.d("FACEMAPPING", face.boundingBox.width().toString())
@@ -138,7 +158,7 @@ class FrameAnalyser( private var context: Context , private var boundingBoxOverl
 
                     // Compute the average of all scores norms for each cluster.
                     val avgScores = nameScoreHashmap.values.map{ scores -> scores.toFloatArray().average() }
-                    Logger.log("Average score for each user : $nameScoreHashmap")
+                    if(log) Logger.log("Average score for each user : $nameScoreHashmap")
 
                     val names = nameScoreHashmap.keys.toTypedArray()
                     nameScoreHashmap.clear()
@@ -153,7 +173,9 @@ class FrameAnalyser( private var context: Context , private var boundingBoxOverl
                         // In case of L2 norm, choose the lowest value.
                         bestScoreUserName = names[ avgScores.indexOf( avgScores.minOrNull()!! ) ]
                     }
-                    Logger.log("Person identified as $bestScoreUserName")
+                    val bestDistance = avgScores.minOrNull()!!
+                    if(log) Logger.log("Person identified as $bestScoreUserName")
+                    callback.onRecognizedFace(bestScoreUserName, bestDistance)
                     predictions.add(
                             Prediction(
                                     face.boundingBox,

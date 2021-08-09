@@ -78,7 +78,6 @@
         android:id="@+id/debug_button"
         android:layout_width="112dp"
         android:layout_height="58dp"
-        android:onClick="tempButton"
         android:text="SKIP"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -98,6 +97,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.75">
+
 
         <androidx.cardview.widget.CardView
             android:id="@+id/cameraWrapper"
@@ -130,7 +130,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
+            <ProgressBar
+                android:id="@+id/progressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/circle_shape"
+                android:indeterminate="false"
+                android:max="100"
+                android:progress="100"
+                android:progressDrawable="@drawable/circular_progress_bar" />
+
         </androidx.cardview.widget.CardView>
+
     </FrameLayout>
 
     <TextView

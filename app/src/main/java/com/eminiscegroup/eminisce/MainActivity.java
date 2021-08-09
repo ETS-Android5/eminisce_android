@@ -4,6 +4,7 @@ import com.eminiscegroup.eminisce.caching.SaveBioData;
 import com.eminiscegroup.eminisce.server.JsonBioApi;
 import com.eminiscegroup.eminisce.server.LibraryUserBioResponse;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,6 +34,7 @@ import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Base64;
@@ -43,6 +45,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -65,6 +68,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -122,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
         logTextView.setText(message);
     }
 
+    private ProgressBar progressBar;
     private PreviewView previewView;
     private FrameAnalyser frameAnalyser;
     private FaceNetModel model;
@@ -150,6 +156,18 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    //Authentication variables
+    private final double face_DistanceThreshold = 0.6f; //Euclidean distance threshold for face recognition
+    private final float fp_ScoreThreshold = 0.5f; //Score threshold for fingerprint
+    private String last_face_identifiedID = null;
+    private String face_identifiedID = null;
+    private String fp_identifiedID = null;
+    private long faceRecognizedTime = 0; // How long a single face has been recognized (in ms)
+    private final long faceRecognizedTimeThreshold = 3000; // How long a single face should have been recognized for before being accepted (in ms)
+    private final long maxFaceThresholdFailTime = 1000; // How long before resetting timer if face recognition fails due to threshold (in ms)
+    private Instant lastFaceRecognizedInstant = null;
+    private Instant lastFPRecognizedInstant = null;
+
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -159,7 +177,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Implementation of CameraX preview
-
+        progressBar = findViewById(R.id.progressBar);
         previewView = findViewById( R.id.preview_view );
         logTextView = findViewById( R.id.log_textview );
         logTextView.setMovementMethod(new ScrollingMovementMethod());
@@ -174,7 +192,19 @@ public class MainActivity extends AppCompatActivity {
         startFingerprintSensor();
 
         frameAnalyser = new FrameAnalyser( this , boundingBoxOverlay);
-        model = new FaceNetModel( this );
+        frameAnalyser.setCallback(new FrameAnalyser.FaceCallback() {
+                                      @Override
+                                      public void onRecognizedFace(@Nullable String userid, double distance) {
+                                          MainActivity.this.onRecognizedFace(userid, distance);
+                                      }
+
+                                      @Override
+                                      public void onNoFace() {
+                                          MainActivity.this.onNoFace();
+                                      }
+                                  });
+        model = new FaceNetModel(this);
+        frameAnalyser.disableLogging();
         fileReader = new FileReader( this );
 
 
@@ -200,10 +230,25 @@ public class MainActivity extends AppCompatActivity {
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //startDownloadBioData();
+                face_identifiedID = "Obama";
+                handleAuthenticationPassed();
             }
         });
+
+        // Check authentication every 100 ms
+        final Handler ha=new Handler();
+        ha.postDelayed(new Runnable() {
+
+            @Override
+            public void run() {
+                progressBar.setProgress((int) (((float)faceRecognizedTime / (float)faceRecognizedTimeThreshold) * 100));
+                finalAuthenticationCheck();
+                ha.postDelayed(this, 50);
+            }
+        }, 50);
     }
+
+    //region SETTING UP
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void startLoadImages()
@@ -294,6 +339,10 @@ public class MainActivity extends AppCompatActivity {
         return data;
     }
 
+    //endregion
+
+    //region CAMERA PREVIEW
+
     // Attach the camera stream to the PreviewView.
     private void startCameraPreview() {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
@@ -324,6 +373,10 @@ public class MainActivity extends AppCompatActivity {
         cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview , imageFrameAnalysis);
         Log.d("CAMERA", "2");
     }
+
+    //endregion
+
+    //region DOWNLOADING AND LOADING BIO DATA
 
     private void startDownloadBioData()
     {
@@ -456,10 +509,94 @@ public class MainActivity extends AppCompatActivity {
         return ((path == null || path.isEmpty()) ? (uri.getPath()) : path);
     }
 
+    //endregion
 
+    //region AUTHENTICATION
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void onRecognizedFace(String userid, Double distance)
+    {
+        face_identifiedID = userid;
+        if(face_identifiedID != last_face_identifiedID && last_face_identifiedID != null)
+        {
+            faceRecognizedTime = 0;
+            Logger.Companion.log("Another face detected, resetting timer");
+        }
+        else
+        {
+            if(lastFaceRecognizedInstant == null) {
+                lastFaceRecognizedInstant = Instant.now();
+                faceRecognizedTime = 0;
+            }
+            if(distance > face_DistanceThreshold)
+            {
+                Logger.Companion.log("Recognized " + userid + " but distance " + distance + " is larger than threshold! Rejecting");
+                // I thought about resetting the process here, but if we only cross the threshold once or twice
+                // or if the face recognition is unsure for a while but then becomes certain then it should still be fine
+            }
+            else {
+                faceRecognizedTime += Duration.between(lastFaceRecognizedInstant, Instant.now()).toMillis();
+                //Logger.Companion.log(userid + " has been detected for " + faceRecognizedTime + " ms");
+            }
+
+        }
+        lastFaceRecognizedInstant = Instant.now();
+        last_face_identifiedID = face_identifiedID;
+    }
+
+    private void onNoFace() {
+        if(face_identifiedID != null)
+            Logger.Companion.log("Face lost, resetting timer");
+        face_identifiedID = null;
+        lastFaceRecognizedInstant = null;
+        faceRecognizedTime = 0;
+    }
+
+    //Should pass when satisfying:
+    // faceRecognizedTime larger than faceRecognizedTimeThreshold
+    // Fingerprint identified and score larger than score threshold
+    // face and finger id match
+    // if finger scanned first, face scanned not longer than 4 seconds afterwards
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void finalAuthenticationCheck()
+    {
+        boolean accepted = false;
+        // Either face or fingerprint not recognized yet
+        if (face_identifiedID == null || fp_identifiedID == null)
+        {
+            return;
+        }
+        // Face has not been recognized for longer than threshold
+        if(faceRecognizedTime < faceRecognizedTimeThreshold)
+        {
+            return;
+        }
+        // Face and fingerprint recognize different people, reject
+        if(face_identifiedID != fp_identifiedID)
+        {
+            Logger.Companion.log("Discrepancy between face and fingerprint, rejected");
+            return;
+        }
+        // In case the fingerprint was scanned first but the face took longer than 4 seconds since the fingerprint was scanned, reject
+        if(Duration.between(lastFPRecognizedInstant, Instant.now()).getSeconds() > 4 )
+        {
+            // ALso reset fingerprint identified ID
+            fp_identifiedID = null;
+            Logger.Companion.log("Face took longer than 4 seconds to scan after fingerprint scanned, rejected");
+            return;
+        }
+        handleAuthenticationPassed();
+
+    }
+
+    private void handleAuthenticationPassed()
+    {
+        goToMain();
+    }
+
+    //endregion
 
     /** Called when the user taps the button */
-    public void tempButton(View view) {
+    public void goToMain() {
         Intent intent = new Intent(this, mainPageActivity.class);
         startActivity(intent);
     }
@@ -553,6 +690,7 @@ public class MainActivity extends AppCompatActivity {
                 {
                     final byte[] tmpBuffer = fpTemplate;
                     runOnUiThread(new Runnable() {
+                        @RequiresApi(api = Build.VERSION_CODES.O)
                         @Override
                         public void run() {
                             if (isRegister) {
@@ -601,8 +739,21 @@ public class MainActivity extends AppCompatActivity {
                                 int ret = ZKFingerService.identify(tmpBuffer, bufids, 55, 1);
                                 if (ret > 0) {
                                     String strRes[] = new String(bufids).split("\t");
+                                    float score = Float.valueOf(strRes[1]);
                                     //Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
-                                    Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
+                                    Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score: " + score);
+
+                                    if(score >= fp_ScoreThreshold) {
+                                        fp_identifiedID = strRes[0];
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            lastFPRecognizedInstant = Instant.now();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Logger.Companion.log("FP Score is too low, rejecting");
+                                    }
+
                                 } else {
                                     Logger.Companion.log("Identify fail");
                                     //Logger.Companion.log(strBase64);
