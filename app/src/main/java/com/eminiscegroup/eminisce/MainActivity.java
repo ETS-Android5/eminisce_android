@@ -47,6 +47,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.zkteco.android.biometric.core.device.ParameterHelper;
@@ -86,6 +87,9 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 
 public class MainActivity extends AppCompatActivity {
+
+    // Change this if you want to enable debug features
+    private static final Boolean DEBUG_MODE = false;
 
     private static final int VID = 6997;
     private static final int PID = 288;
@@ -249,6 +253,13 @@ public class MainActivity extends AppCompatActivity {
                 ha.postDelayed(this, 50);
             }
         }, 50);
+
+        if(!DEBUG_MODE)
+        {
+            logTextView.setVisibility(View.GONE);
+            boundingBoxOverlay.setWillNotDraw(true);
+            findViewById(R.id.debug_button).setVisibility(View.GONE);
+        }
     }
 
     //region SETTING UP
@@ -269,15 +280,20 @@ public class MainActivity extends AppCompatActivity {
                     .setCancelable( false )
                     .setNegativeButton( "LOAD", (dialog, which) ->
                     {
+                        dialog.dismiss();
                         try {
-                            dialog.dismiss();
                             frameAnalyser.setFaceList(loadSerializedImageData());
                             loadFPBio();
                             Logger.Companion.log("Serialized data loaded.");
+                            Toast toast = Toast.makeText(this, "Initialization complete.", Toast.LENGTH_SHORT);
+                            toast.show();
                         }
                         catch(Exception e)
                         {
+                            Toast toast = Toast.makeText(MainActivity.this, "ERROR: Failed to load biometric data. Please check log.", Toast.LENGTH_LONG);
+                            toast.show();
                             e.printStackTrace();
+
                         }
                     })
                     .setPositiveButton( "REDOWNLOAD FROM DATABASE", (dialog, which) ->
@@ -398,99 +414,103 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(Call<List<LibraryUserBioResponse>> call, Response<List<LibraryUserBioResponse>> response) {
                 if (response.code() == 200) {
                     Log.d("DB", "Download from DB success");
-                    List<LibraryUserBioResponse> bios = (List<LibraryUserBioResponse>) response.body();
-                    SaveBioData save_bio_data = new SaveBioData(MainActivity.this, bios);
-                    save_bio_data.Save();
-                    loadFacesBio();
-                    loadFPBio();
+                    try {
+                        List<LibraryUserBioResponse> bios = (List<LibraryUserBioResponse>) response.body();
+                        SaveBioData save_bio_data = new SaveBioData(MainActivity.this, bios);
+                        save_bio_data.Save();
+                        loadFacesBio();
+                        loadFPBio();
+                        Toast toast = Toast.makeText(MainActivity.this, "Initialization complete.", Toast.LENGTH_SHORT);
+                        toast.show();
+                    }
+                    catch(Exception e)
+                    {
+                        Toast toast = Toast.makeText(MainActivity.this, "ERROR: Failed to load biometric data. Please check log.", Toast.LENGTH_LONG);
+                        toast.show();
+                    }
                 }
                 else{
+                    Toast toast = Toast.makeText(MainActivity.this, "ERROR: Failed to download biometric data. Please check log.\nCode: " + response.code(), Toast.LENGTH_LONG);
+                    toast.show();
                     Log.e("DB", response.errorBody().toString());
                 }
             }
             @Override
             public void onFailure(Call<List<LibraryUserBioResponse>> call, Throwable t) {
                 Log.e("DB", "OnFailure called");
+                Toast toast = Toast.makeText(MainActivity.this, "Please check Internet connection! " /* + t.getMessage() */, Toast.LENGTH_LONG);
+                toast.show();
                 t.printStackTrace();
             }
         });
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void loadFacesBio()
+    private void loadFacesBio() throws Exception
     {
         Logger.Companion.log("Reading downloaded facial biometric data to prepare authentication...");
-        try {
-            File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FACES");
-            Log.d("LOAD FACE IMAGES", "Does BIO_FACES folder exist: " + dir.exists());
-            ArrayList<kotlin.Pair<String,Bitmap>> images = new ArrayList<kotlin.Pair<String,Bitmap>>();
-            DocumentFile tree = DocumentFile.fromFile(dir);
-            if (tree.listFiles().length > 0) {
-                for (DocumentFile df : tree.listFiles()) {
-                    if (df.isDirectory()) {
-                        String name = df.getName();
-                        for (DocumentFile face : df.listFiles()) {
-                            try {
-                                images.add(new kotlin.Pair(name, getFixedBitmap(face.getUri())));
-                            }
-                            catch(Exception e)
-                            {
-                                Logger.Companion.log("Could not parse an image in " + name + " directory.");
-                                break;
-                            }
+        File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FACES");
+        Log.d("LOAD FACE IMAGES", "Does BIO_FACES folder exist: " + dir.exists());
+        ArrayList<kotlin.Pair<String,Bitmap>> images = new ArrayList<kotlin.Pair<String,Bitmap>>();
+        DocumentFile tree = DocumentFile.fromFile(dir);
+        if (tree.listFiles().length > 0) {
+            for (DocumentFile df : tree.listFiles()) {
+                if (df.isDirectory()) {
+                    String name = df.getName();
+                    for (DocumentFile face : df.listFiles()) {
+                        try {
+                            images.add(new kotlin.Pair(name, getFixedBitmap(face.getUri())));
                         }
-                        Logger.Companion.log("Found " + df.listFiles().length + " images in " + name + " directory");
+                        catch(Exception e)
+                        {
+                            Logger.Companion.log("Could not parse an image in " + name + " directory.");
+                            throw e;
+                        }
                     }
-                    else
-                    {
-                        Logger.Companion.log("Invalid BIO_FACES folder structure.");
-                    }
+                    Logger.Companion.log("Found " + df.listFiles().length + " images in " + name + " directory");
+                }
+                else
+                {
+                    Logger.Companion.log("Invalid BIO_FACES folder structure.");
+                    throw new Exception("Invalid BIO_FACES folder structure");
                 }
             }
-            else {
-                Logger.Companion.log( "Empty biometric data folder!" );
-            }
-            fileReader.run( images , fileReaderCallback );
-            Logger.Companion.log( "Detecting faces in " + images.size() + " images ..." );
-
-
         }
-        catch(Exception e)
-        {
-            e.printStackTrace();
+        else {
+            Logger.Companion.log( "Empty biometric data folder!" );
         }
+        fileReader.run( images , fileReaderCallback );
+        Logger.Companion.log( "Detecting faces in " + images.size() + " images ..." );
+
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void loadFPBio()
+    private void loadFPBio() throws Exception
     {
-        try {
-            Logger.Companion.log("Loading fingerprints ...");
-            File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
-            Log.d("LOAD FP", "Does BIO_FINGERPRINTS folder exist: " + dir.exists());
-            DocumentFile tree = DocumentFile.fromFile(dir);
-            if (tree.listFiles().length > 0) {
-                for (DocumentFile df : tree.listFiles()) {
-                    if (df.isDirectory()) {
-                        String name = df.getName();
-                        for (DocumentFile fp : df.listFiles()) {
-                            File file = new File(getPath(fp.getUri()));
-                            byte[] bytes = Files.readAllBytes(file.toPath());
-                            ZKFingerService.save(bytes, name);
-                            //Logger.Companion.log("Loaded fingerprint for " + name);
-                        }
+        Logger.Companion.log("Loading fingerprints ...");
+        File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
+        Log.d("LOAD FP", "Does BIO_FINGERPRINTS folder exist: " + dir.exists());
+        DocumentFile tree = DocumentFile.fromFile(dir);
+        if (tree.listFiles().length > 0) {
+            for (DocumentFile df : tree.listFiles()) {
+                if (df.isDirectory()) {
+                    String name = df.getName();
+                    for (DocumentFile fp : df.listFiles()) {
+                        File file = new File(getPath(fp.getUri()));
+                        byte[] bytes = Files.readAllBytes(file.toPath());
+                        ZKFingerService.save(bytes, name);
+                        //Logger.Companion.log("Loaded fingerprint for " + name);
                     }
                 }
+                else
+                    throw new Exception("Invalid BIO_FINGERPRINT folder structure");
             }
-            else {
-                Logger.Companion.log( "Empty biometric data folder!" );
-            }
-            Logger.Companion.log("Successfully loaded fingerprint data");
         }
-        catch(Exception e)
-        {
-            e.printStackTrace();
+        else {
+            Logger.Companion.log( "Empty biometric data folder!" );
+            //throw new Exception("Empty biometric data folder");
         }
+        Logger.Companion.log("Successfully loaded fingerprint data");
     }
 
     public String getPath(Uri uri) {
@@ -578,6 +598,8 @@ public class MainActivity extends AppCompatActivity {
         {
             Logger.Companion.log("Discrepancy between face and fingerprint, rejected\n" +
                     "face_identifiedID is '" + face_identifiedID + "' fp_identifiedID is '" + fp_identifiedID + ";");
+            Toast toast = Toast.makeText(this, "Please retry!.", Toast.LENGTH_LONG);
+            toast.show();
             return;
         }
         // In case the fingerprint was scanned first but the face took longer than 4 seconds since the fingerprint was scanned, reject
@@ -586,6 +608,8 @@ public class MainActivity extends AppCompatActivity {
             // ALso reset fingerprint identified ID
             fp_identifiedID = null;
             Logger.Companion.log("Face took longer than 4 seconds to scan after fingerprint scanned, rejected");
+            Toast toast = Toast.makeText(this, "Please scan your fingerprint again!.", Toast.LENGTH_LONG);
+            toast.show();
             return;
         }
         handleAuthenticationPassed();

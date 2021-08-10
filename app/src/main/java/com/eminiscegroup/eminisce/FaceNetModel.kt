@@ -89,7 +89,7 @@ class FaceNetModel( private var context : Context ) {
         if ( (rect.top + height ) > source.height ){
             height = source.height - rect.top
         }
-        Log.d("BITMAPPING", String.format("W: %d H: %d Rect: %s", width, height, rect))
+        //Log.d("BITMAPPING", String.format("W: %d H: %d Rect: %s", width, height, rect))
         try {
             val croppedBitmap = Bitmap.createBitmap(source, rect.left, rect.top, width, height)
             // Uncomment the below line if you want to save the input image.
