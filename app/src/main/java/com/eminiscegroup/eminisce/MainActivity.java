@@ -181,6 +181,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags( WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN );
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.activity_main);
 
         // Implementation of CameraX preview
@@ -582,7 +584,6 @@ public class MainActivity extends AppCompatActivity {
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void finalAuthenticationCheck()
     {
-        boolean accepted = false;
         // Either face or fingerprint not recognized yet
         if (face_identifiedID == null || fp_identifiedID == null)
         {
@@ -606,7 +607,8 @@ public class MainActivity extends AppCompatActivity {
         // In case the fingerprint was scanned first but the face took longer than 4 seconds since the fingerprint was scanned, reject
         if(Duration.between(lastFPRecognizedInstant, Instant.now()).getSeconds() > 4 )
         {
-            // ALso reset fingerprint identified ID
+            onNoFace();
+            // Also reset fingerprint identified ID
             fp_identifiedID = null;
             Logger.Companion.log("Face took longer than 4 seconds to scan after fingerprint scanned, rejected");
             Toast toast = Toast.makeText(this, "Please scan your fingerprint again!", Toast.LENGTH_LONG);

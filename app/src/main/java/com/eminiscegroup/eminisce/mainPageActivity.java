@@ -18,6 +18,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.eminiscegroup.eminisce.R;
+import com.eminiscegroup.eminisce.rfid.RFIDListener;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
@@ -54,6 +55,8 @@ public class mainPageActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags( WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN );
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
 
         setContentView(R.layout.activity_main2);
         userID = getIntent().getStringExtra("userid");
@@ -66,6 +69,45 @@ public class mainPageActivity extends AppCompatActivity {
 
         Methods = retrofit.create(Methods.class);
         //Intent intent = getIntent();
+
+        barcode = findViewById(R.id.barcode_info);
+
+        // Start listening to RFID scanner (simulation)
+        RFIDListener rfidListener = new RFIDListener(new RFIDListener.RFIDCallback() {
+            @Override
+            public void onRFIDReceive(String msg) {
+                // Run on UI Thread is required or the app will crash
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        Toast toast = Toast.makeText(mainPageActivity.this, "Scanned " + msg, Toast.LENGTH_SHORT);
+                        toast.show();
+                        barcode.setText(msg);
+                        addButton(null);
+                        barcode.setText("");
+                    }
+                });
+            }
+
+            @Override
+            public void onRFIDConnected(String address) {
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        Toast toast = Toast.makeText(mainPageActivity.this, "New RFID Scanner connected from " + address, Toast.LENGTH_SHORT);
+                        toast.show();
+                    }
+                });
+            }
+        });
+
+        try {
+            rfidListener.startListening();
+        }
+        catch(Exception e)
+        {
+            Toast toast = Toast.makeText(mainPageActivity.this, "Failed to start connection to RFID scanner.", Toast.LENGTH_SHORT);
+            toast.show();
+            e.printStackTrace();
+        }
     }
     public void scanButton(View view) {
         IntentIntegrator intentIntegrator = new IntentIntegrator(
@@ -78,7 +120,7 @@ public class mainPageActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        barcode = findViewById(R.id.barcode_info);
+
         errorView = findViewById(R.id.error_view);
         super.onActivityResult(requestCode, resultCode, data);
         IntentResult intentResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
