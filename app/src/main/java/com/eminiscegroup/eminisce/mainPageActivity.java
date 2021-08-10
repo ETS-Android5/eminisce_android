@@ -1,11 +1,14 @@
 package com.eminiscegroup.eminisce;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -21,6 +24,7 @@ import com.google.zxing.integration.android.IntentResult;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -42,6 +46,8 @@ public class mainPageActivity extends AppCompatActivity {
     ArrayList<String> barcodes = new ArrayList<String>();
 
     private String userID;
+
+    private HashMap<Integer, String> loanInfo = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -120,8 +126,7 @@ public class mainPageActivity extends AppCompatActivity {
     {
         Intent intent = new Intent(this, checkoutPageActivity.class);
         TextView textView = findViewById(R.id.book_view);
-        String bookInfo = textView.getText().toString();
-        intent.putExtra(book_info, bookInfo);
+        intent.putExtra("loan_info", loanInfo);
         intent.putExtra("userid", userID);
 
         //loanBook();
@@ -198,11 +203,14 @@ public class mainPageActivity extends AppCompatActivity {
                     content += "Authors: " + ids.getAuthors() + "\n";
                     //FIND A WAY TO PUT THE COVER HERE!!!
 
-                    textView.append(content);
+                    textView.append(content + "\n");
                     textView.append(duedate);
                     // OK I see your clever trick here, you run getBookData() again to put the duedate in?
                     // It would be great if you just put every fcking thing in the "next" page instead
                     barcodes.add(postBarcode);
+
+                    // Allow me to introduce an even more clever trick
+                    loanInfo.put(ids.getId(), content);
                     //}
                 }
             }
@@ -224,6 +232,7 @@ public class mainPageActivity extends AppCompatActivity {
         Call<NewLoan> call = Methods.borrowBook(borrow);
 
         call.enqueue(new Callback<NewLoan>() {
+            @RequiresApi(api = Build.VERSION_CODES.N)
             @Override
             public void onResponse(Call<NewLoan> call, Response<NewLoan> response) {
                 if(response.code() != 201)
@@ -253,10 +262,26 @@ public class mainPageActivity extends AppCompatActivity {
 
                     //textView = findViewById(R.id.book_view);
                     NewLoan borrowResponse = response.body();
+
+                    // Bad code below
                     //String content = "";
-                    duedate = "DueDate: " + borrowResponse.getDuedate() + "\n\n";
+                    //duedate = "DueDate: " + borrowResponse.getDuedate() + "\n\n";
                     //getBookData();
                     //textView.setText(content);
+
+                    // Slightly less bad code
+                    String responseBook = borrowResponse.getBook();
+                    try {
+                        String newInfo = loanInfo.get(Integer.parseInt(responseBook)) + "Please return book before " + borrowResponse.getDuedate() + "\n";
+                        loanInfo.replace(Integer.parseInt(responseBook), newInfo);
+                    }
+                    catch(Exception e)
+                    {
+                        Toast toast = Toast.makeText(mainPageActivity.this, "Invalid loan information retrieved! Book ID " + responseBook + " was not sent as part of loan request.",
+                                Toast.LENGTH_LONG);
+                        toast.show();
+                        return;
+                    }
 
                     booksProcessed ++;
                     if(booksProcessed == barcodes.size())
