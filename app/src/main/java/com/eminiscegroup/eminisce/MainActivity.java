@@ -598,7 +598,7 @@ public class MainActivity extends AppCompatActivity {
         {
             Logger.Companion.log("Discrepancy between face and fingerprint, rejected\n" +
                     "face_identifiedID is '" + face_identifiedID + "' fp_identifiedID is '" + fp_identifiedID + ";");
-            Toast toast = Toast.makeText(this, "Please retry!.", Toast.LENGTH_LONG);
+            Toast toast = Toast.makeText(this, "Please retry!", Toast.LENGTH_LONG);
             toast.show();
             onNoFace();
             return;
@@ -609,7 +609,7 @@ public class MainActivity extends AppCompatActivity {
             // ALso reset fingerprint identified ID
             fp_identifiedID = null;
             Logger.Companion.log("Face took longer than 4 seconds to scan after fingerprint scanned, rejected");
-            Toast toast = Toast.makeText(this, "Please scan your fingerprint again!.", Toast.LENGTH_LONG);
+            Toast toast = Toast.makeText(this, "Please scan your fingerprint again!", Toast.LENGTH_LONG);
             toast.show();
             return;
         }
@@ -677,21 +677,21 @@ public class MainActivity extends AppCompatActivity {
             final FingerprintCaptureListener listener = new FingerprintCaptureListener() {
                 @Override
                 public void captureOK(final byte[] fpImage) {
-                    final int width = fingerprintSensor.getImageWidth();
-                    final int height = fingerprintSensor.getImageHeight();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if(null != fpImage)
-                            {
-                                ToolUtils.outputHexString(fpImage);
-                                LogHelper.i("width=" + width + "\nHeight=" + height);
-                                Bitmap bitmapFp = ToolUtils.renderCroppedGreyScaleBitmap(fpImage, width, height);
-                                //fingerprintImage.setImageBitmap(bitmapFp);
-                            }
-                            //textView.setText("FakeStatus:" + fingerprintSensor.getFakeStatus());
-                        }
-                    });
+//                    final int width = fingerprintSensor.getImageWidth();
+//                    final int height = fingerprintSensor.getImageHeight();
+//                    runOnUiThread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            if(null != fpImage)
+//                            {
+//                                ToolUtils.outputHexString(fpImage);
+//                                LogHelper.i("width=" + width + "\nHeight=" + height);
+//                                Bitmap bitmapFp = ToolUtils.renderCroppedGreyScaleBitmap(fpImage, width, height);
+//                                //fingerprintImage.setImageBitmap(bitmapFp);
+//                            }
+//                            //textView.setText("FakeStatus:" + fingerprintSensor.getFakeStatus());
+//                        }
+//                    });
                 }
                 @Override
                 public void captureError(FingerprintException e) {
@@ -699,8 +699,10 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            LogHelper.d("CaptureError  errno=" + exp.getErrorCode() +
+                            Log.e("FINGERPRINT", "CaptureError  errno=" + exp.getErrorCode() +
                                     ",Internal error code: " + exp.getInternalErrorCode() + ",message=" + exp.getMessage());
+                            Toast toast = Toast.makeText(MainActivity.this, "Please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
+                            toast.show();
                         }
                     });
                 }
@@ -711,6 +713,8 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             Logger.Companion.log("Extract fail, errorcode:" + err);
+                            Toast toast = Toast.makeText(MainActivity.this, "Please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
+                            toast.show();
                         }
                     });
                 }
@@ -726,7 +730,7 @@ public class MainActivity extends AppCompatActivity {
                             if (isRegister) {
                                 byte[] bufids = new byte[256];
                                 int ret = ZKFingerService.identify(tmpBuffer, bufids, 55, 1);
-                                strBase64 = Base64.encodeToString(tmpBuffer, 0, tmpBuffer.length, Base64.NO_WRAP);
+                                //strBase64 = Base64.encodeToString(tmpBuffer, 0, tmpBuffer.length, Base64.NO_WRAP);
                                 if (ret > 0)
                                 {
                                     String strRes[] = new String(bufids).split("\t");
@@ -750,7 +754,7 @@ public class MainActivity extends AppCompatActivity {
                                         ZKFingerService.save(regTemp, "test" + uid++);
                                         System.arraycopy(regTemp, 0, lastRegTemp, 0, ret);
                                         //Base64 Template
-                                        strBase64 = Base64.encodeToString(regTemp, 0, ret, Base64.NO_WRAP);
+                                        //strBase64 = Base64.encodeToString(regTemp, 0, ret, Base64.NO_WRAP);
 
                                         //Convert byte array into bitmap
                                         //bitmap = BitmapFactory.decodeByteArray(regTemp , 0, regTemp.length);
@@ -782,13 +786,13 @@ public class MainActivity extends AppCompatActivity {
                                     else
                                     {
                                         Logger.Companion.log("FP Score " + score + " for " + strRes[0] + " + is too low, rejecting");
-                                        Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!.", Toast.LENGTH_SHORT);
+                                        Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
                                         toast.show();
                                     }
 
                                 } else {
                                     Logger.Companion.log("Identify fail");
-                                    Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!.", Toast.LENGTH_SHORT);
+                                    Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
                                     toast.show();
                                     //Logger.Companion.log(strBase64);
                                     //Logger.Companion.log(tmpBuffer.toString());
