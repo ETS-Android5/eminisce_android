@@ -163,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
 
     //Authentication variables
     private final double face_DistanceThreshold = 0.6f; //Euclidean distance threshold for face recognition
-    private final float fp_ScoreThreshold = 55f; //Score threshold for fingerprint
+    private final int fp_ScoreThreshold = 55; //Score threshold for fingerprint
     private String last_face_identifiedID = null;
     private String face_identifiedID = null;
     private String fp_identifiedID = null;
@@ -766,14 +766,14 @@ public class MainActivity extends AppCompatActivity {
                             } else {
                                 byte[] bufids = new byte[256];
 
-                                int ret = ZKFingerService.identify(tmpBuffer, bufids, 55, 1);
+                                int ret = ZKFingerService.identify(tmpBuffer, bufids, fp_ScoreThreshold, 1);
                                 if (ret > 0) {
                                     String strRes[] = new String(bufids).split("\t");
                                     float score = Float.valueOf(strRes[1]);
                                     //Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score:" + strRes[1]);
                                     Logger.Companion.log("Identify successful, userid:" + strRes[0] + ", score: " + score);
 
-                                    if(score >= fp_ScoreThreshold) {
+                                    if(score >= Math.round(fp_ScoreThreshold)) {
                                         fp_identifiedID = strRes[0];
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                             lastFPRecognizedInstant = Instant.now();
@@ -781,11 +781,15 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                     else
                                     {
-                                        Logger.Companion.log("FP Score is too low, rejecting");
+                                        Logger.Companion.log("FP Score " + score + " for " + strRes[0] + " + is too low, rejecting");
+                                        Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!.", Toast.LENGTH_SHORT);
+                                        toast.show();
                                     }
 
                                 } else {
                                     Logger.Companion.log("Identify fail");
+                                    Toast toast = Toast.makeText(MainActivity.this, "Unable to identify, please try scanning your fingerprint again!.", Toast.LENGTH_SHORT);
+                                    toast.show();
                                     //Logger.Companion.log(strBase64);
                                     //Logger.Companion.log(tmpBuffer.toString());
                                 }
