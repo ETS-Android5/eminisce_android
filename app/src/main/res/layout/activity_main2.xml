@@ -42,6 +42,7 @@
             android:inputType="textPersonName"
             android:text="@string/barcode_Info"
             android:textColor="@color/black"
+            android:textColorHint="@color/black"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />

@@ -633,6 +633,13 @@ public class MainActivity extends AppCompatActivity {
 
     /** Called when the user taps the button */
     public void goToMain() {
+        //Stop fingerprint scanner
+        try {
+            stopSensor();
+        } catch (FingerprintException e) {
+            e.printStackTrace();
+        }
+
         Intent intent = new Intent(this, mainPageActivity.class);
         intent.putExtra("userid", face_identifiedID);
         startActivity(intent);
@@ -708,8 +715,8 @@ public class MainActivity extends AppCompatActivity {
                         public void run() {
                             Log.e("FINGERPRINT", "CaptureError  errno=" + exp.getErrorCode() +
                                     ",Internal error code: " + exp.getInternalErrorCode() + ",message=" + exp.getMessage());
-                            Toast toast = Toast.makeText(MainActivity.this, "Please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
-                            toast.show();
+                            //Toast toast = Toast.makeText(MainActivity.this, "Please try scanning your fingerprint again!", Toast.LENGTH_SHORT);
+                            //toast.show();
                         }
                     });
                 }
