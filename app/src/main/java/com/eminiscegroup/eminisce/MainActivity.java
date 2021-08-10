@@ -600,6 +600,7 @@ public class MainActivity extends AppCompatActivity {
                     "face_identifiedID is '" + face_identifiedID + "' fp_identifiedID is '" + fp_identifiedID + ";");
             Toast toast = Toast.makeText(this, "Please retry!.", Toast.LENGTH_LONG);
             toast.show();
+            onNoFace();
             return;
         }
         // In case the fingerprint was scanned first but the face took longer than 4 seconds since the fingerprint was scanned, reject
