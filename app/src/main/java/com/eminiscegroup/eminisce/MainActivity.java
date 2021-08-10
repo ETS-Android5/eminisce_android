@@ -239,8 +239,13 @@ public class MainActivity extends AppCompatActivity {
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                face_identifiedID = "Obama";
-                handleAuthenticationPassed();
+                if(face_identifiedID != null && !face_identifiedID.isEmpty())
+                    handleAuthenticationPassed();
+                else {
+                    Toast toast = Toast.makeText(MainActivity.this, "Scan your face first.", Toast.LENGTH_SHORT);
+                    toast.show();
+                }
+
             }
         });
 

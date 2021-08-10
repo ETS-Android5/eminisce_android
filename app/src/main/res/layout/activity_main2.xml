@@ -41,6 +41,7 @@
             android:importantForAutofill="no"
             android:inputType="textPersonName"
             android:text="@string/barcode_Info"
+            android:textColor="@color/black"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -181,6 +182,7 @@
                 android:id="@+id/book_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/black"
                 android:textSize="20sp"
                 android:visibility="visible" />
         </LinearLayout>
