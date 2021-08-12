@@ -37,14 +37,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.provider.MediaStore;
 import android.text.method.ScrollingMovementMethod;
-import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -53,7 +51,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.zkteco.android.biometric.core.device.ParameterHelper;
 import com.zkteco.android.biometric.core.device.TransportType;
 import com.zkteco.android.biometric.core.utils.LogHelper;
-import com.zkteco.android.biometric.core.utils.ToolUtils;
 import com.zkteco.android.biometric.module.fingerprintreader.FingerprintCaptureListener;
 import com.zkteco.android.biometric.module.fingerprintreader.FingerprintSensor;
 import com.zkteco.android.biometric.module.fingerprintreader.FingprintFactory;
@@ -78,7 +75,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
-import kotlin.Pair;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -90,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
 
     // Change this if you want to enable debug features
     private static final Boolean DEBUG_MODE = false;
+    // Change this to your own server URL
+    public static String BASE_URL = "https://eminisce.herokuapp.com/";
 
     private static final int VID = 6997;
     private static final int PID = 288;
@@ -104,10 +102,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final String ACTION_USB_PERMISSION = "com.zkteco.silkiddemo.USB_PERMISSION";
 
-    public static String BASE_URL = "https://eminisce.herokuapp.com/";
-
     private Methods Methods;
-    private boolean verified = false;
     public static final int PICK_IMAGE = 100;
     private Button btn;
     private String strBase64;
@@ -140,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
     private SharedPreferences sharedPreferences;
 
+    // Ask for USB permission
     private BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -155,6 +151,8 @@ public class MainActivity extends AppCompatActivity {
                     else
                     {
                         LogHelper.e("not permission!");
+                        Toast toast = Toast.makeText(MainActivity.this, "Please allow USB connection to connect your fingeprrint scanner.", Toast.LENGTH_LONG);
+                        toast.show();
                     }
                 }
             }
@@ -165,15 +163,12 @@ public class MainActivity extends AppCompatActivity {
     private final double face_DistanceThreshold = 0.6f; //Euclidean distance threshold for face recognition
     private final int fp_ScoreThreshold = 55; //Score threshold for fingerprint
     private String last_face_identifiedID = null;
-    private String face_identifiedID = null;
-    private String fp_identifiedID = null;
+    private String face_identifiedID = null; // The ID of the user recognized by face recognition
+    private String fp_identifiedID = null; // The ID of the user recognized by fingerprint scanning
     private long faceRecognizedTime = 0; // How long a single face has been recognized (in ms)
     private final long faceRecognizedTimeThreshold = 2000; // How long a single face should have been recognized for before being accepted (in ms)
-    private final long maxFaceThresholdFailTime = 1000; // How long before resetting timer if face recognition fails due to threshold (in ms)
-    private Instant lastFaceRecognizedInstant = null;
-    private Instant lastFPRecognizedInstant = null;
-
-    public static String userID;
+    private Instant lastFaceRecognizedInstant = null; // Instant for time related authentication checks
+    private Instant lastFPRecognizedInstant = null; // Instant for time related authentication checks
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
@@ -185,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        // Implementation of CameraX preview
+        // Assign UI variables
         progressBar = findViewById(R.id.progressBar);
         previewView = findViewById( R.id.preview_view );
         logTextView = findViewById( R.id.log_textview );
@@ -200,6 +195,7 @@ public class MainActivity extends AppCompatActivity {
         //Start fingerprintSensor
         startFingerprintSensor();
 
+        // Start the frame analyser to do face recognition
         frameAnalyser = new FrameAnalyser( this , boundingBoxOverlay);
         frameAnalyser.setCallback(new FrameAnalyser.FaceCallback() {
                                       @Override
@@ -214,6 +210,7 @@ public class MainActivity extends AppCompatActivity {
                                   });
         model = new FaceNetModel(this);
         frameAnalyser.disableLogging();
+        // Start file reader to save and read serialized face recognition data
         fileReader = new FileReader( this );
 
 
@@ -227,14 +224,18 @@ public class MainActivity extends AppCompatActivity {
             startCameraPreview();
         }
 
+        // Start the process of loading the serialized face images and the fingerprint templates
+        // Or download if not present
         startLoadImages();
 
+        // Start fingerprint scanning continnuously
         try {
             startFingerprintScan();
         } catch (FingerprintException e) {
             e.printStackTrace();
         }
 
+        // Debug button to allow testing without fingerprint scanner
         btn = (Button)findViewById(R.id.debug_button);
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -249,7 +250,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Check authentication every 100 ms
+        // Update progress bar and check authentication every 50 ms
         final Handler ha=new Handler();
         ha.postDelayed(new Runnable() {
 
@@ -261,6 +262,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }, 50);
 
+        // Disable debug related UI elements if DEBUG_MDOE is false
         if(!DEBUG_MODE)
         {
             logTextView.setVisibility(View.GONE);
@@ -312,6 +314,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Get processed bitmap from the saved face image files (accounting for rotation)
     private Bitmap getFixedBitmap( Uri imageFileUri ) {
         Bitmap imageBitmap = BitmapUtils.Companion.getBitmapFromUri( getContentResolver() , imageFileUri );
         ExifInterface exifInterface = null;
@@ -320,6 +323,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        // Rotate the image to make it upright depending on the original rotation
         switch(exifInterface.getAttributeInt( ExifInterface.TAG_ORIENTATION ,
                 ExifInterface.ORIENTATION_UNDEFINED ))
         {
@@ -336,10 +340,13 @@ public class MainActivity extends AppCompatActivity {
         return imageBitmap;
     }
 
+    // Initiate the callback for the file reader
     private final FileReader.ProcessCallback fileReaderCallback = new FileReader.ProcessCallback() {
         public void onProcessCompleted( ArrayList<kotlin.Pair<String, float[]>> data, int numImagesWithNoFaces) {
+            // When the biometric files have been successfully read, we will assign the faces to the face recognition model
             frameAnalyser.setFaceList(data);
             try {
+                // Then save the serialized data for reuse later
                 saveSerializedImageData(data);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -348,6 +355,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    // Save serialized data
     private void saveSerializedImageData( ArrayList<kotlin.Pair<String, float[]>> data ) throws IOException {
         File serializedDataFile = new File( getFilesDir() , SERIALIZED_DATA_FILENAME );
         ObjectOutputStream ostream = new ObjectOutputStream((OutputStream)(new FileOutputStream(serializedDataFile)));
@@ -357,6 +365,7 @@ public class MainActivity extends AppCompatActivity {
         sharedPreferences.edit().putBoolean( SHARED_PREF_IS_DATA_STORED_KEY , true ).apply();
     }
 
+    // Load serialized data and return the data as a pair for each person (user ID) and the associate float array (facial data)
     private ArrayList<kotlin.Pair<String, float[]>> loadSerializedImageData() throws IOException, ClassNotFoundException {
         File serializedDataFile = new File( getFilesDir() , SERIALIZED_DATA_FILENAME );
         ObjectInputStream objectInputStream = new ObjectInputStream((InputStream)(new FileInputStream(serializedDataFile)));
@@ -384,7 +393,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d("CAMERA", "1");
 
     }
-
+    // Bind the preview to the UI element
     private void bindPreview(ProcessCameraProvider cameraProvider) {
         Preview preview = new Preview.Builder().build();
         CameraSelector cameraSelector = new CameraSelector.Builder()
@@ -406,6 +415,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startDownloadBioData()
     {
+        // We use Retrofit to call Django Rest Framework API
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
@@ -422,9 +432,12 @@ public class MainActivity extends AppCompatActivity {
                 if (response.code() == 200) {
                     Log.d("DB", "Download from DB success");
                     try {
+                        // It will return a list of library user info where fingerprint and face are encoded in base64
                         List<LibraryUserBioResponse> bios = (List<LibraryUserBioResponse>) response.body();
+                        // Save the files to the internal storage so we can read later
                         SaveBioData save_bio_data = new SaveBioData(MainActivity.this, bios);
                         save_bio_data.Save();
+                        // Load the files
                         loadFacesBio();
                         loadFPBio();
                         Toast toast = Toast.makeText(MainActivity.this, "Initialization complete.", Toast.LENGTH_SHORT);
@@ -456,9 +469,12 @@ public class MainActivity extends AppCompatActivity {
     private void loadFacesBio() throws Exception
     {
         Logger.Companion.log("Reading downloaded facial biometric data to prepare authentication...");
+        // We will read from the root folder BIO_FACES inside which each person has a separate folder named as their user ID
+        // and inside each person's folder is image files of that person's face
         File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FACES");
         Log.d("LOAD FACE IMAGES", "Does BIO_FACES folder exist: " + dir.exists());
         ArrayList<kotlin.Pair<String,Bitmap>> images = new ArrayList<kotlin.Pair<String,Bitmap>>();
+        // We use DocumentFile to easily read the tree structure
         DocumentFile tree = DocumentFile.fromFile(dir);
         if (tree.listFiles().length > 0) {
             for (DocumentFile df : tree.listFiles()) {
@@ -495,8 +511,11 @@ public class MainActivity extends AppCompatActivity {
     private void loadFPBio() throws Exception
     {
         Logger.Companion.log("Loading fingerprints ...");
+        // We will read from the root folder BIO_FINGERPRINTS inside which each person has a separate folder named as their user ID
+        // and inside each person's folder is fingerprint template file of that person's fingerprint
         File dir = new File(this.getFilesDir().toString() + File.separator + "BIO_FINGERPRINTS");
         Log.d("LOAD FP", "Does BIO_FINGERPRINTS folder exist: " + dir.exists());
+        // We use DocumentFile to easily read the tree structure
         DocumentFile tree = DocumentFile.fromFile(dir);
         if (tree.listFiles().length > 0) {
             for (DocumentFile df : tree.listFiles()) {
@@ -504,7 +523,9 @@ public class MainActivity extends AppCompatActivity {
                     String name = df.getName();
                     for (DocumentFile fp : df.listFiles()) {
                         File file = new File(getPath(fp.getUri()));
+                        // Read the raw bytes of the file
                         byte[] bytes = Files.readAllBytes(file.toPath());
+                        // Use the fingerprint SDK to save the fingerprint to memory for recognizing
                         ZKFingerService.save(bytes, name);
                         //Logger.Companion.log("Loaded fingerprint for " + name);
                     }
@@ -519,7 +540,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Logger.Companion.log("Successfully loaded fingerprint data");
     }
-
+    // Helper method to get file absolute path from uri
     public String getPath(Uri uri) {
 
         String path = null;
@@ -542,10 +563,15 @@ public class MainActivity extends AppCompatActivity {
     //endregion
 
     //region AUTHENTICATION
+
+    // Callback function when the frame analyser and the face recognition model successfully recognizes a face
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void onRecognizedFace(String userid, Double distance)
     {
+        // Save the recognized user id
         face_identifiedID = userid;
+        // Below we do checks for the following situations where we reset the face recognition process:
+        // - Another face was detected
         if(face_identifiedID != last_face_identifiedID && last_face_identifiedID != null)
         {
             faceRecognizedTime = 0;
@@ -557,13 +583,16 @@ public class MainActivity extends AppCompatActivity {
                 lastFaceRecognizedInstant = Instant.now();
                 faceRecognizedTime = 0;
             }
+            // If the euclidean distance is larger than the threshold
             if(distance > face_DistanceThreshold)
             {
+                // We will not count towards the recognized time
                 Logger.Companion.log("Recognized " + userid + " but distance " + distance + " is larger than threshold! Rejecting");
                 // I thought about resetting the process here, but if we only cross the threshold once or twice
                 // or if the face recognition is unsure for a while but then becomes certain then it should still be fine
             }
             else {
+                // Count towards the recognized time
                 faceRecognizedTime += Duration.between(lastFaceRecognizedInstant, Instant.now()).toMillis();
                 //Logger.Companion.log(userid + " has been detected for " + faceRecognizedTime + " ms");
             }
@@ -573,7 +602,9 @@ public class MainActivity extends AppCompatActivity {
         last_face_identifiedID = face_identifiedID;
     }
 
+    // Handle on no face was detected
     private void onNoFace() {
+        // If the identified ID is not null it means there was a face and it's now lost
         if(face_identifiedID != null)
             Logger.Companion.log("Face lost, resetting timer");
         face_identifiedID = null;
@@ -581,6 +612,7 @@ public class MainActivity extends AppCompatActivity {
         faceRecognizedTime = 0;
     }
 
+    // Final authentication check function, called periodically as determined in onCreate()
     //Should pass when satisfying:
     // faceRecognizedTime larger than faceRecognizedTimeThreshold
     // Fingerprint identified and score larger than score threshold
@@ -620,6 +652,7 @@ public class MainActivity extends AppCompatActivity {
             toast.show();
             return;
         }
+        // If all checks have passed then we can let the user in to the second page
         handleAuthenticationPassed();
 
     }
@@ -631,7 +664,7 @@ public class MainActivity extends AppCompatActivity {
 
     //endregion
 
-    /** Called when the user taps the button */
+    // Go to the second page for scanning books
     public void goToMain() {
         //Stop fingerprint scanner
         try {
@@ -639,14 +672,16 @@ public class MainActivity extends AppCompatActivity {
         } catch (FingerprintException e) {
             e.printStackTrace();
         }
-
+        // Start new intent
         Intent intent = new Intent(this, mainPageActivity.class);
+        // Pass the identified user ID to the next page
         intent.putExtra("userid", face_identifiedID);
         startActivity(intent);
     }
 
     //region FINGERPRINT FUNCTIONS
 
+    // Start fingerprint sensor
     private void startFingerprintSensor() {
         // Define output log level
         LogHelper.setLevel(Log.VERBOSE);
@@ -659,6 +694,7 @@ public class MainActivity extends AppCompatActivity {
         fingerprintSensor = FingprintFactory.createFingerprintSensor(this, TransportType.USB, fingerprintParams);
     }
 
+    // Init the fingerprint scanner USB connection
     private void InitDevice()
     {
         UsbManager musbManager = (UsbManager)this.getSystemService(Context.USB_SERVICE);
@@ -682,6 +718,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Start the fingerprint scanning process and its callbacks
     public void startFingerprintScan () throws FingerprintException
     {
         //Fingerprint Capture Listener
@@ -833,29 +870,9 @@ public class MainActivity extends AppCompatActivity {
             Toast toast = Toast.makeText(this, "Cannot detect fingerprint scanner. Please connect a fingerprint scanner and restart the app!", Toast.LENGTH_LONG);
             toast.show();
         }
-
-        /*
-        if (enrolled == true)
-        {
-            verify();
-        }
-        */
     }
 
-    public void enrollBtn (View view)
-    {
-        if (bstart) {
-            isRegister = true;
-            enrollidx = 0;
-            Logger.Companion.log("You need to scan your fingerprint 3 times");
-        }
-        else
-        {
-            Logger.Companion.log("Please start your fingerprint sensor first");
-        }
-    }
-
-    //ends the fingerprint sensor
+    // ends the fingerprint sensor
     public void stopSensor()throws FingerprintException
     {
         try {
@@ -873,22 +890,6 @@ public class MainActivity extends AppCompatActivity {
             }
         } catch (FingerprintException e) {
             Logger.Companion.log("Failed to stop fingerprint sensor, errno=" + e.getErrorCode() + "\nmessage=" + e.getMessage());
-        }
-    }
-
-    // verify the fingerprint
-    public void verify() throws FingerprintException {
-
-        if (bstart)
-        {
-            isRegister = false;
-            enrollidx = 0;
-            if(verified == true)
-            {
-                stopSensor();
-                Intent intent2 = new Intent(this, mainPageActivity.class);
-                startActivity(intent2);
-            }
         }
     }
 

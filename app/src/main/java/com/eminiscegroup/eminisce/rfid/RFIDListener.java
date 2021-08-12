@@ -1,5 +1,8 @@
 /*
 THIS CODE IS MEANT FOR READING FROM RFID SCANNER
+
+We can communicate with the RFID scanner via a socket connection in local wifi
+USB communication is possible but out of scope because we can't buy an industrial RFID scanner anyway
  */
 
 package com.eminiscegroup.eminisce.rfid;

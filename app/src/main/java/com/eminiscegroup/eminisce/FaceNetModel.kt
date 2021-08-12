@@ -100,8 +100,10 @@ class FaceNetModel( private var context : Context ) {
         }
         catch(e : Exception)
         {
-            //Weird error, I have no idea what is happening here
+            // Sometimes the rect.left value goes negative
+            //  Weird error, I have no idea what is happening here
             Logger.log("Encountered problem trying to crop an image...")
+            // Just force it to be positive, it doesn't seem to break anything
             val croppedBitmap = Bitmap.createBitmap(source, Math.abs(rect.left), rect.top, width, height)
             // Uncomment the below line if you want to save the input image.
             // BitmapUtils.saveBitmap( context , croppedBitmap , "source" )

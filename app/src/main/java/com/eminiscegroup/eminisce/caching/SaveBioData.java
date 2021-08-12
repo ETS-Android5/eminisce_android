@@ -27,6 +27,17 @@ public class SaveBioData {
 
     public void Save()
     {
+        // Save the biometric data files in the following structure:
+        //  - BIO_FACES
+        //      - <user_id1>
+        //          - <user_id1>.png
+        //      - <user_id2>
+        //          - <user_id2>.png
+        //  - BIO_FINGERPRINTS
+        //      - <user_id1>
+        //          - <user_id1>.fp
+        //      - <user_id2>
+        //          - <user_id2>.fp
         Log.d("CACHING", "Starting to save fetched data from database");
         for ( LibraryUserBioResponse bio : bios)
         {
