@@ -45,6 +45,7 @@ public class mainPageActivity extends AppCompatActivity {
     private Methods Methods;
     String duedate = "";
     ArrayList<String> barcodes = new ArrayList<String>();
+    private int booksProcessed = 0;
 
     private String userID;
 
@@ -58,17 +59,18 @@ public class mainPageActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
 
+        //Display user's ID on the top right of the page
         setContentView(R.layout.activity_main2);
         userID = getIntent().getStringExtra("userid");
         ((TextView)findViewById(R.id.userID)).setText(userID);
 
+        // We use Retrofit to call Django Rest Framework API
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(MainActivity.BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
         Methods = retrofit.create(Methods.class);
-        //Intent intent = getIntent();
 
         barcode = findViewById(R.id.barcode_info);
 
@@ -109,6 +111,8 @@ public class mainPageActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
+    //To start up barcode/OR Code scanner through the camera
     public void scanButton(View view) {
         IntentIntegrator intentIntegrator = new IntentIntegrator(
                 mainPageActivity.this);
@@ -123,6 +127,8 @@ public class mainPageActivity extends AppCompatActivity {
 
         errorView = findViewById(R.id.error_view);
         super.onActivityResult(requestCode, resultCode, data);
+
+        //retrieving data from the barcode/QR code scanner and display the information of the book
         IntentResult intentResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if(intentResult.getContents() != null)
         {
@@ -136,8 +142,10 @@ public class mainPageActivity extends AppCompatActivity {
             toast.show();
         }
     }
-    private int booksProcessed = 0;
+
+
     /** Called when the user taps the button */
+    //Process the borrowing of books which are scanned by the user
     public void confirmButton(View view) throws InterruptedException {
         if(barcodes.size() == 0)
         {
@@ -152,9 +160,8 @@ public class mainPageActivity extends AppCompatActivity {
         {
             postBarcode = barcodes.get(i);
             loanBook();
-            //getBookData(); This just creates race condition...
+
         }
-        //goToCheckoutPage();
 
     }
 
@@ -162,8 +169,9 @@ public class mainPageActivity extends AppCompatActivity {
     {
         goToCheckoutPage();
     }
-    //String allMessage = "";
 
+    //Proceed to the Checkout page after borrowing the book
+    //Bring the book loan information and user id to the checkout page using HashMap
     private void goToCheckoutPage()
     {
         Intent intent = new Intent(this, checkoutPageActivity.class);
@@ -171,18 +179,20 @@ public class mainPageActivity extends AppCompatActivity {
         intent.putExtra("loan_info", loanInfo);
         intent.putExtra("userid", userID);
 
-        //loanBook();
         startActivity(intent);
     }
 
+    //Ending the current session and bringing the application back to the authentication page
+    //Users have to re-authenticate themseleves after pressing the cancel button
     public void cancelButton(View view)
     {
         Intent intent = new Intent(this, MainActivity.class);
         startActivity(intent);
     }
 
+    //This is to display the book info of the book scanned
+    //To retrieve the book info, getBookData() is called
     public void addButton(View view) {
-        //Intent intent = new Intent(this, checkoutPageActivity.class);
         EditText editText = (EditText) findViewById(R.id.barcode_info);
         String tempBarcode = editText.getText().toString();
         if(tempBarcode.isEmpty()) {
@@ -200,8 +210,10 @@ public class mainPageActivity extends AppCompatActivity {
 
     }
 
+    //This function is to retrieve the book info using the book id added by the user
     private void getBookData()
     {
+        //calling the database to get data of the particular book id
         Call<Retrieve> call = Methods.getIdData(postBarcode);
         TextView textView = findViewById(R.id.book_view);
         errorView = findViewById(R.id.error_view);
@@ -237,23 +249,19 @@ public class mainPageActivity extends AppCompatActivity {
                 else {
                     Retrieve ids = response.body();
 
-                    //for(Retrieve id: ids)
-                    //{
                     String content = "";
-                    
+
+                    //Displaying Title and Authors
                     content += "Title: " + ids.getTitle() + "      " + "\n";
                     content += "Authors: " + ids.getAuthors() + "\n";
-                    //FIND A WAY TO PUT THE COVER HERE!!!
 
                     textView.append(content + "\n");
                     textView.append(duedate);
-                    // OK I see your clever trick here, you run getBookData() again to put the duedate in?
-                    // It would be great if you just put every fcking thing in the "next" page instead
+
                     barcodes.add(postBarcode);
 
-                    // Allow me to introduce an even more clever trick
+                    //Putting the info here so that it can be also displayed in the checkout page
                     loanInfo.put(ids.getId(), content);
-                    //}
                 }
             }
 
@@ -266,8 +274,10 @@ public class mainPageActivity extends AppCompatActivity {
         });
     }
 
+    //This function is called to loan the books and get the due date of the loaned books
     private void loanBook()
     {
+        //Calling the database to process the loan of the book to the particular user
         NewLoan borrow = new NewLoan(userID, postBarcode);
         TextView textView = findViewById(R.id.book_view);
         errorView = findViewById(R.id.error_view);
@@ -283,7 +293,6 @@ public class mainPageActivity extends AppCompatActivity {
                     try {
                         JSONObject errorJson = new JSONObject(response.errorBody().string());
                         errorMsg = errorJson.getString("error");
-                        //errorMsg = errorJson.toString();
                     }
                     catch(Exception e)
                     {
@@ -301,17 +310,9 @@ public class mainPageActivity extends AppCompatActivity {
                     return;
                 }
                 else {
-
-                    //textView = findViewById(R.id.book_view);
                     NewLoan borrowResponse = response.body();
 
-                    // Bad code below
-                    //String content = "";
-                    //duedate = "DueDate: " + borrowResponse.getDuedate() + "\n\n";
-                    //getBookData();
-                    //textView.setText(content);
-
-                    // Slightly less bad code
+                    //To save the book duedate for each book into loanInfo so that it can be displayed in the checkout page
                     String responseBook = borrowResponse.getBook();
                     try {
                         String newInfo = loanInfo.get(Integer.parseInt(responseBook)) + "Please return book before " + borrowResponse.getDuedate() + "\n";
@@ -319,6 +320,7 @@ public class mainPageActivity extends AppCompatActivity {
                     }
                     catch(Exception e)
                     {
+                        //If there is an error, an error message is shown and book loan is not processed
                         Toast toast = Toast.makeText(mainPageActivity.this, "Invalid loan information retrieved! Book ID " + responseBook + " was not sent as part of loan request.",
                                 Toast.LENGTH_LONG);
                         toast.show();
