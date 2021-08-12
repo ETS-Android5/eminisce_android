@@ -830,6 +830,8 @@ public class MainActivity extends AppCompatActivity {
         catch (FingerprintException e)
         {
             Logger.Companion.log("Fail to begin sensor.errorcode:"+ e.getErrorCode() + "err message:" + e.getMessage() + "inner code:" + e.getInternalErrorCode());
+            Toast toast = Toast.makeText(this, "Cannot detect fingerprint scanner. Please connect a fingerprint scanner and restart the app!", Toast.LENGTH_LONG);
+            toast.show();
         }
 
         /*
