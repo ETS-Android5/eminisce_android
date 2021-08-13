@@ -161,7 +161,7 @@ public class MainActivity extends AppCompatActivity {
 
     //Authentication variables
     private final double face_DistanceThreshold = 0.6f; //Euclidean distance threshold for face recognition
-    private final int fp_ScoreThreshold = 55; //Score threshold for fingerprint
+    private final int fp_ScoreThreshold = 85; //Score threshold for fingerprint
     private String last_face_identifiedID = null;
     private String face_identifiedID = null; // The ID of the user recognized by face recognition
     private String fp_identifiedID = null; // The ID of the user recognized by fingerprint scanning
