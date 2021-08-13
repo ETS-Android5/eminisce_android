@@ -24,8 +24,11 @@ import com.google.zxing.integration.android.IntentResult;
 
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
+import java.util.TimeZone;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -315,15 +318,26 @@ public class mainPageActivity extends AppCompatActivity {
                     //To save the book duedate for each book into loanInfo so that it can be displayed in the checkout page
                     String responseBook = borrowResponse.getBook();
                     try {
-                        String newInfo = loanInfo.get(Integer.parseInt(responseBook)) + "Please return book before " + borrowResponse.getDuedate() + "\n";
+                        // Convert the received String to Date
+                        SimpleDateFormat strToDate = new SimpleDateFormat(
+                                "yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.US);
+                        strToDate.setTimeZone(TimeZone.getTimeZone("UTC"));
+                        // Then convert the Date to a more readable String again
+                        SimpleDateFormat dateToStr = new SimpleDateFormat(
+                                "MMMM d, yyyy HH:mm:ss", Locale.ENGLISH);
+                        strToDate.setTimeZone(TimeZone.getDefault());
+
+                        String parsedDate = dateToStr.format(strToDate.parse(borrowResponse.getDuedate()));
+                        String newInfo = loanInfo.get(Integer.parseInt(responseBook)) + "Please return book before " +  parsedDate + "\n";
                         loanInfo.replace(Integer.parseInt(responseBook), newInfo);
                     }
                     catch(Exception e)
                     {
                         //If there is an error, an error message is shown and book loan is not processed
-                        Toast toast = Toast.makeText(mainPageActivity.this, "Invalid loan information retrieved! Book ID " + responseBook + " was not sent as part of loan request.",
+                        Toast toast = Toast.makeText(mainPageActivity.this, "Error while processing loan request. Please check the log.",
                                 Toast.LENGTH_LONG);
                         toast.show();
+                        e.printStackTrace();
                         return;
                     }
 
