@@ -13,7 +13,7 @@ Note that biometric data enrollments are NOT done through this Android app. It i
 ***The Android application requires a compatible fingerprint scanner. We use ZKTeco ZK Live 20R but most of ZKTeco's fingerprint scanners should work. Alternatively you can turn on debug mode which allows skipping the fingerprint scanning step by setting DEBUG_MODE to true at line 88 in the MainActivity.java file. See the instructions below for more information.***
 
 ## Instructions
- Please find here our User Manual PDF file: [Eminisce_User_Manual.pdf](https://github.com/digitalk064/eminisce_android/blob/master/docs/Eminisce_User_Manual.pdf)  
+ Please find here our User Manual PDF file: [Eminisce_User_Manual.pdf](docs/Eminisce_User_Manual.pdf)  
  ***Read from page 30 for instructions on setting up the Android application.***
  
 ## Developers
